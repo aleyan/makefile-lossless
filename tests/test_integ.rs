@@ -1,4 +1,6 @@
 use makefile_lossless::Makefile;
+use std::fs;
+use std::path::Path;
 
 #[test]
 fn test_parse_large_makefile() {
@@ -75,4 +77,72 @@ fn test_parse_large_makefile() {
         
         println!("\n=== End of {} ===\n", makefile_name);
     }
+}
+
+#[test]
+fn test_parse_all_makefiles() {
+    // Track overall success rate
+    let mut total_files = 0;
+    let mut successful_parses = 0;
+    
+    // Get all files in the makefiles directory
+    let makefiles_dir = Path::new("makefiles");
+    if !makefiles_dir.exists() || !makefiles_dir.is_dir() {
+        panic!("makefiles directory not found");
+    }
+    
+    // Collect all files in the directory
+    let entries = match fs::read_dir(makefiles_dir) {
+        Ok(entries) => entries,
+        Err(e) => panic!("Failed to read makefiles directory: {}", e),
+    };
+    
+    // Process each file
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            
+            // Skip directories
+            if path.is_dir() {
+                continue;
+            }
+            
+            total_files += 1;
+            let file_name = path.file_name().unwrap().to_string_lossy();
+            println!("\n=== Testing {} ===", file_name);
+            
+            // Read file content
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    println!("File size: {} bytes", content.len());
+                    
+                    // Attempt to parse
+                    match Makefile::from_reader(content.as_bytes()) {
+                        Ok(makefile) => {
+                            successful_parses += 1;
+                            println!("SUCCESS: Parsed successfully");
+                            println!("Found {} variables, {} rules, {} includes", 
+                                makefile.variable_definitions().count(),
+                                makefile.rules().count(),
+                                makefile.includes().count());
+                        },
+                        Err(e) => {
+                            println!("FAILED: {}", e);
+                        }
+                    }
+                },
+                Err(e) => println!("ERROR: Failed to read file: {}", e),
+            }
+            
+            println!("=== End of {} ===", file_name);
+        }
+    }
+    
+    // Report results
+    println!("\n=== Summary ===");
+    println!("Total files processed: {}", total_files);
+    println!("Successfully parsed: {}", successful_parses);
+    println!("Parse success rate: {:.1}%", (successful_parses as f64 / total_files as f64) * 100.0);
+    
+    // Test passes regardless of parse success - we're just collecting statistics
 } 
