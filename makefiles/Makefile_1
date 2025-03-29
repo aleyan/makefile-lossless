@@ -1,0 +1,24 @@
+# Sample Makefile for testing
+CC = gcc
+CFLAGS = -Wall -g
+
+# Conditional section
+ifdef DEBUG
+	CFLAGS += -DDEBUG
+endif
+
+.PHONY: all clean
+
+all: program
+
+program: main.o helper.o
+	$(CC) $(CFLAGS) -o $@ $^
+
+main.o: main.c helper.h
+	$(CC) $(CFLAGS) -c $<
+
+helper.o: helper.c helper.h
+	$(CC) $(CFLAGS) -c $<
+
+clean:
+	rm -f *.o program 
