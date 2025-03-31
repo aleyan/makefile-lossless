@@ -53,6 +53,7 @@ pub enum SyntaxKind {
     RECIPE,
     VARIABLE,
     EXPR,
+    INDENTED_BLOCK, // Indented lines outside of rules
 
     // Directives
     CONDITIONAL,
