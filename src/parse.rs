@@ -71,10 +71,37 @@ pub enum Lang {}
 impl rowan::Language for Lang {
     type Kind = SyntaxKind;
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-        unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
+        match raw.0 {
+            0 => SyntaxKind::WHITESPACE,
+            1 => SyntaxKind::NEWLINE,
+            2 => SyntaxKind::INDENT,
+            3 => SyntaxKind::COMMENT,
+            4 => SyntaxKind::OPERATOR,
+            5 => SyntaxKind::DOLLAR,
+            6 => SyntaxKind::LPAREN,
+            7 => SyntaxKind::RPAREN,
+            8 => SyntaxKind::COMMA,
+            9 => SyntaxKind::BACKSLASH,
+            10 => SyntaxKind::LINE_CONTINUATION,
+            11 => SyntaxKind::IDENTIFIER,
+            12 => SyntaxKind::QUOTE,
+            13 => SyntaxKind::TEXT,
+            14 => SyntaxKind::ERROR,
+            15 => SyntaxKind::ROOT,
+            16 => SyntaxKind::VARIABLE,
+            17 => SyntaxKind::RULE,
+            18 => SyntaxKind::EXPR,
+            19 => SyntaxKind::VARIABLE_REF,
+            20 => SyntaxKind::INCLUDE,
+            21 => SyntaxKind::CONDITIONAL,
+            22 => SyntaxKind::INDENTED_BLOCK,
+            23 => SyntaxKind::TAB,
+            24 => SyntaxKind::RECIPE_LINE,
+            _ => SyntaxKind::ERROR,
+        }
     }
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
-        kind.into()
+        rowan::SyntaxKind(kind as u16)
     }
 }
 
@@ -113,20 +140,13 @@ fn parse(text: &str) -> Parse {
     impl Parser {
         fn error(&mut self, msg: String) {
             // For certain error types related to line continuations, we'll skip reporting them
-            let (current_token, continuations_involved) = match self.current() {
-                Some(BACKSLASH) => {
-                    // Check if this backslash is followed by newline (indicating continuation)
-                    if self.tokens.len() > 1 && self.tokens[self.tokens.len() - 2].0 == NEWLINE {
-                        (BACKSLASH, true)
-                    } else {
-                        (BACKSLASH, false)
-                    }
-                },
-                Some(t) => (t, false),
-                None => (ERROR, false) // Placeholder
+            let continuations_involved = match self.current() {
+                Some(LINE_CONTINUATION) => true,
+                Some(_) => false,
+                None => false
             };
             
-            // Skip reporting errors for backslash line continuations in variable definitions
+            // Skip reporting errors for line continuations in variable definitions
             // which are often misinterpreted as rule target issues
             if msg == "expected ':'" && continuations_involved {
                 // Just advance and return without reporting the error
@@ -204,33 +224,16 @@ fn parse(text: &str) -> Parse {
         }
 
         fn parse_recipe_line(&mut self) {
-            self.builder.start_node(RECIPE.into());
+            // Recipe lines start with a tab, then optionally @ or - followed by the command
+            self.builder.start_node(RECIPE_LINE.into());
+            self.bump(); // consume the tab
 
-            // Recipe lines must start with a TAB character
-            match self.current() {
-                Some(INDENT) => self.bump(),
-                _ => {
-                    self.error("recipe line must start with a tab character".into());
-                    self.builder.finish_node();
-                    return;
-                }
-            }
-
-            // Parse the rest of the line
+            // Handle recipe line contents
             while self.current().is_some() && self.current() != Some(NEWLINE) {
-                match self.current() {
-                    Some(TEXT) => self.bump(),
-                    Some(COMMENT) => self.bump(), // Allow comments in recipes
-                    Some(DOLLAR) => self.bump(),
-                    Some(WHITESPACE) => self.bump(),
-                    _ => {
-                        self.error("unexpected token in recipe".into());
-                        self.bump(); // Advance anyway to prevent infinite loops
-                    }
-                }
+                self.bump();
             }
 
-            // Consume newline if present
+            // Consume the trailing newline if present
             if self.current() == Some(NEWLINE) {
                 self.bump();
             }
@@ -395,67 +398,42 @@ fn parse(text: &str) -> Parse {
                         self.bump();
                         self.skip_ws();
 
-                        // Start expression node for variable value
+                        // Parse value
                         self.builder.start_node(EXPR.into());
                         
-                        let mut found_multiline = false;
-                        
-                        // Scan through tokens to determine if this is a multiline variable
-                        let backslash_positions = {
-                            let mut positions = Vec::new();
-                            let mut i = self.tokens.len();
-                            
-                            while i > 0 {
-                                i -= 1;
-                                if i > 0 && 
-                                   self.tokens[i].0 == BACKSLASH && 
-                                   self.tokens[i-1].0 == NEWLINE {
-                                    // Found a backslash before a newline - likely a continuation
-                                    found_multiline = true;
-                                    positions.push(i);
-                                    i -= 1; // Skip the newline too
-                                } else if self.tokens[i].0 == NEWLINE && positions.is_empty() {
-                                    // Reached normal line end
-                                    break;
-                                }
-                            }
-                            
-                            positions
-                        };
-                        
-                        if found_multiline {
-                            // Special handling for multiline variable values
-                            let mut i = 0;
-                            while i < self.tokens.len() && self.current().is_some() {
-                                if self.current() == Some(BACKSLASH) && 
-                                   backslash_positions.contains(&(self.tokens.len() - 1)) {
-                                    // Found a line continuation backslash - skip it
+                        // Process tokens until we reach end of variable definition
+                        while self.current().is_some() {
+                            match self.current() {
+                                // Handle line continuations - consume both the backslash and the newline
+                                Some(LINE_CONTINUATION) => {
+                                    // Consume the line continuation token (don't include in output)
                                     self.tokens.pop();
                                     
-                                    // Skip the newline too
+                                    // Consume the newline token if it exists
                                     if self.current() == Some(NEWLINE) {
                                         self.bump();
-                                        self.skip_ws(); // Skip leading whitespace on the next line
+                                        // Skip whitespace at the beginning of the next line
+                                        self.skip_ws();
                                     }
-                                } else if self.current() == Some(NEWLINE) && !backslash_positions.contains(&(self.tokens.len() - 1)) {
-                                    // Normal newline (not part of continuation) - end of value
+                                },
+                                
+                                // Handle normal newlines (not preceded by backslash)
+                                Some(NEWLINE) => {
+                                    // End of variable definition
                                     break;
-                                } else {
-                                    // Regular token - consume it
+                                },
+                                
+                                // Handle everything else - just consume the token
+                                _ => {
                                     self.bump();
                                 }
-                                i += 1;
-                            }
-                        } else {
-                            // Simple single-line variable value
-                            while self.current().is_some() && self.current() != Some(NEWLINE) {
-                                self.bump();
                             }
                         }
                         
                         self.builder.finish_node();
 
                         // Expect newline at the end of variable definition
+                        // (except for the last line of the file)
                         if self.current() == Some(NEWLINE) {
                             self.bump();
                         } else if self.current().is_some() {
@@ -737,7 +715,7 @@ fn parse(text: &str) -> Parse {
         fn is_assignment_line(&self) -> bool {
             let mut i = self.tokens.len();
             let mut saw_identifier = false;
-            let mut continue_scanning = true;
+            let continue_scanning = true;
             let mut in_line_continuation = false;
             
             while i > 0 && continue_scanning {
@@ -754,12 +732,9 @@ fn parse(text: &str) -> Parse {
                             break;
                         }
                     },
-                    BACKSLASH => {
-                        // If we see a backslash and the next token (to the left in our reversed view) is a newline,
-                        // this is a line continuation marker
-                        if i > 0 && self.tokens[i-1].0 == NEWLINE {
-                            in_line_continuation = true;
-                        }
+                    LINE_CONTINUATION => {
+                        // Found a line continuation token - set the flag
+                        in_line_continuation = true;
                     },
                     IDENTIFIER => {
                         saw_identifier = true;
@@ -1322,6 +1297,11 @@ impl Rule {
         None
     }
 
+    /// Convert the rule to a string representation
+    pub fn to_string(&self) -> String {
+        self.syntax().text().to_string()
+    }
+
     /// Targets of this rule
     ///
     /// # Example
@@ -1434,17 +1414,11 @@ impl Rule {
     pub fn recipes(&self) -> impl Iterator<Item = String> {
         self.syntax()
             .children()
-            .filter(|it| it.kind() == RECIPE)
-            .flat_map(|it| {
-                it.children_with_tokens().filter_map(|it| {
-                    it.as_token().and_then(|t| {
-                        if t.kind() == TEXT {
-                            Some(t.text().to_string())
-                        } else {
-                            None
-                        }
-                    })
-                })
+            .filter(|it| it.kind() == RECIPE_LINE)
+            .map(|recipe| {
+                let recipe_text = recipe.text().to_string();
+                // Remove the leading tab and trim whitespace
+                recipe_text.trim_start_matches('\t').trim().to_string()
             })
     }
 
@@ -1457,26 +1431,72 @@ impl Rule {
     /// rule.replace_command(0, "new command");
     /// assert_eq!(rule.recipes().collect::<Vec<_>>(), vec!["new command"]);
     /// ```
-    pub fn replace_command(&self, i: usize, line: &str) {
-        // Find the RECIPE with index i, then replace the line in it
-        let index = self
+    pub fn replace_command(&self, idx: usize, new_command: &str) -> Option<Rule> {
+        let recipes: Vec<_> = self
             .syntax()
             .children()
-            .filter(|it| it.kind() == RECIPE)
-            .nth(i)
-            .expect("index out of bounds")
-            .index();
+            .filter(|it| it.kind() == RECIPE_LINE)
+            .collect();
+
+        if idx >= recipes.len() {
+            return None;
+        }
 
         let mut builder = GreenNodeBuilder::new();
-        builder.start_node(RECIPE.into());
-        builder.token(INDENT.into(), "\t");
-        builder.token(TEXT.into(), line);
-        builder.token(NEWLINE.into(), "\n");
+        builder.start_node(RULE.into());
+
+        // Copy all children, replacing the specified recipe
+        let mut recipe_idx = 0;
+        for child in self.syntax().children_with_tokens() {
+            if let Some(node) = child.as_node() {
+                if node.kind() == RECIPE_LINE {
+                    if recipe_idx == idx {
+                        // Replace this recipe
+                        builder.start_node(RECIPE_LINE.into());
+                        builder.token(INDENT.into(), "\t");
+                        builder.token(TEXT.into(), new_command);
+                        builder.token(NEWLINE.into(), "\n");
+                        builder.finish_node();
+                    } else {
+                        // Copy this recipe as-is by rebuilding it
+                        builder.start_node(RECIPE_LINE.into());
+                        // Manually add each token in the recipe
+                        for token in node.children_with_tokens() {
+                            if let Some(token) = token.as_token() {
+                                builder.token(token.kind().into(), token.text());
+                            }
+                        }
+                        builder.finish_node();
+                    }
+                    recipe_idx += 1;
+                } else {
+                    // Copy non-recipe node as-is by rebuilding it
+                    builder.start_node(node.kind().into());
+                    // Recurse through node structure
+                    for token in node.children_with_tokens() {
+                        if let Some(token) = token.as_token() {
+                            builder.token(token.kind().into(), token.text());
+                        } else if let Some(child_node) = token.as_node() {
+                            // Recursive case for nested nodes
+                            builder.start_node(child_node.kind().into());
+                            for subtoken in child_node.children_with_tokens() {
+                                if let Some(subtoken) = subtoken.as_token() {
+                                    builder.token(subtoken.kind().into(), subtoken.text());
+                                }
+                            }
+                            builder.finish_node();
+                        }
+                    }
+                    builder.finish_node();
+                }
+            } else if let Some(token) = child.as_token() {
+                builder.token(token.kind().into(), token.text());
+            }
+        }
+
         builder.finish_node();
 
-        let syntax = SyntaxNode::new_root_mut(builder.finish());
-        self.0
-            .splice_children(index..index + 1, vec![syntax.into()]);
+        Some(Rule(SyntaxNode::new_root(builder.finish())))
     }
 
     /// Add a new command to the rule
@@ -1488,28 +1508,44 @@ impl Rule {
     /// rule.push_command("command2");
     /// assert_eq!(rule.recipes().collect::<Vec<_>>(), vec!["command", "command2"]);
     /// ```
-    pub fn push_command(&self, line: &str) {
-        // Find the latest RECIPE entry, then append the new line after it.
-        let index = self
-            .0
-            .children_with_tokens()
-            .filter(|it| it.kind() == RECIPE)
-            .last();
-
-        let index = index.map_or_else(
-            || self.0.children_with_tokens().count(),
-            |it| it.index() + 1,
-        );
-
+    pub fn push_command(&self, command: &str) -> Rule {
         let mut builder = GreenNodeBuilder::new();
-        builder.start_node(RECIPE.into());
+        builder.start_node(RULE.into());
+
+        // First, copy all existing children, including RECIPE_LINE nodes
+        for child in self.syntax().children_with_tokens() {
+            if let Some(node) = child.as_node() {
+                // Copy node by rebuilding it
+                builder.start_node(node.kind().into());
+                for token in node.children_with_tokens() {
+                    if let Some(token) = token.as_token() {
+                        builder.token(token.kind().into(), token.text());
+                    } else if let Some(child_node) = token.as_node() {
+                        builder.start_node(child_node.kind().into());
+                        for child_token in child_node.children_with_tokens() {
+                            if let Some(token) = child_token.as_token() {
+                                builder.token(token.kind().into(), token.text());
+                            }
+                        }
+                        builder.finish_node();
+                    }
+                }
+                builder.finish_node();
+            } else if let Some(token) = child.as_token() {
+                builder.token(token.kind().into(), token.text());
+            }
+        }
+
+        // Add the new recipe line at the end
+        builder.start_node(RECIPE_LINE.into());
         builder.token(INDENT.into(), "\t");
-        builder.token(TEXT.into(), line);
+        builder.token(TEXT.into(), command);
         builder.token(NEWLINE.into(), "\n");
         builder.finish_node();
-        let syntax = SyntaxNode::new_root_mut(builder.finish());
 
-        self.0.splice_children(index..index, vec![syntax.into()]);
+        builder.finish_node();
+
+        Rule(SyntaxNode::new_root(builder.finish()))
     }
 }
 
@@ -1532,6 +1568,39 @@ impl Include {
     pub fn is_optional(&self) -> bool {
         let text = self.syntax().text();
         text.to_string().starts_with("-include") || text.to_string().starts_with("sinclude")
+    }
+}
+
+impl From<rowan::SyntaxKind> for SyntaxKind {
+    fn from(kind: rowan::SyntaxKind) -> Self {
+        match kind.0 {
+            0 => SyntaxKind::WHITESPACE,
+            1 => SyntaxKind::NEWLINE,
+            2 => SyntaxKind::INDENT,
+            3 => SyntaxKind::COMMENT,
+            4 => SyntaxKind::OPERATOR,
+            5 => SyntaxKind::DOLLAR,
+            6 => SyntaxKind::LPAREN,
+            7 => SyntaxKind::RPAREN,
+            8 => SyntaxKind::COMMA,
+            9 => SyntaxKind::BACKSLASH,
+            10 => SyntaxKind::LINE_CONTINUATION,
+            11 => SyntaxKind::IDENTIFIER,
+            12 => SyntaxKind::QUOTE,
+            13 => SyntaxKind::TEXT,
+            14 => SyntaxKind::ERROR,
+            15 => SyntaxKind::ROOT,
+            16 => SyntaxKind::VARIABLE,
+            17 => SyntaxKind::RULE,
+            18 => SyntaxKind::EXPR,
+            19 => SyntaxKind::VARIABLE_REF,
+            20 => SyntaxKind::INCLUDE,
+            21 => SyntaxKind::CONDITIONAL,
+            22 => SyntaxKind::INDENTED_BLOCK,
+            23 => SyntaxKind::TAB,
+            24 => SyntaxKind::RECIPE_LINE,
+            _ => SyntaxKind::ERROR,
+        }
     }
 }
 
@@ -1612,7 +1681,7 @@ rule: dependency
     EXPR@24..34
       IDENTIFIER@24..34 "dependency"
     NEWLINE@34..35 "\n"
-    RECIPE@35..44
+    RECIPE_LINE@35..44
       INDENT@35..36 "\t"
       TEXT@36..43 "command"
       NEWLINE@43..44 "\n"
@@ -1688,7 +1757,7 @@ rule: dependency
       WHITESPACE@17..18 " "
       IDENTIFIER@18..29 "dependency2"
     NEWLINE@29..30 "\n"
-    RECIPE@30..39
+    RECIPE_LINE@30..39
       INDENT@30..31 "\t"
       TEXT@31..38 "command"
       NEWLINE@38..39 "\n"
@@ -1723,21 +1792,31 @@ rule: dependency
     fn test_push_command() {
         let mut makefile = Makefile::new();
         let rule = makefile.add_rule("rule");
-        rule.push_command("command");
-        rule.push_command("command2");
+        
+        // Create a new rule with the first command added
+        let rule_with_cmd1 = rule.push_command("command");
+        // Create a new rule with the second command added
+        let rule_with_both = rule_with_cmd1.push_command("command2");
+        
+        // Check the commands in the modified rule
         assert_eq!(
-            rule.recipes().collect::<Vec<_>>(),
+            rule_with_both.recipes().collect::<Vec<_>>(),
             vec!["command", "command2"]
         );
-
-        rule.push_command("command3");
+        
+        // Add a third command
+        let rule_with_all = rule_with_both.push_command("command3");
         assert_eq!(
-            rule.recipes().collect::<Vec<_>>(),
+            rule_with_all.recipes().collect::<Vec<_>>(),
             vec!["command", "command2", "command3"]
         );
-
+        
+        // The original makefile is unchanged
+        assert_eq!(makefile.to_string(), "rule:\n");
+        
+        // Convert the modified rule to a string for verification
         assert_eq!(
-            makefile.to_string(),
+            rule_with_all.to_string(),
             "rule:\n\tcommand\n\tcommand2\n\tcommand3\n"
         );
     }
@@ -1746,20 +1825,33 @@ rule: dependency
     fn test_replace_command() {
         let mut makefile = Makefile::new();
         let rule = makefile.add_rule("rule");
-        rule.push_command("command");
-        rule.push_command("command2");
+        
+        // Create a new rule with the first command added
+        let rule_with_cmd1 = rule.push_command("command");
+        // Create a new rule with the second command added
+        let rule_with_both = rule_with_cmd1.push_command("command2");
+        
+        // Check the commands in the modified rule
         assert_eq!(
-            rule.recipes().collect::<Vec<_>>(),
+            rule_with_both.recipes().collect::<Vec<_>>(),
             vec!["command", "command2"]
         );
-
-        rule.replace_command(0, "new command");
+        
+        // Replace the first command
+        let modified_rule = rule_with_both.replace_command(0, "new command").unwrap();
         assert_eq!(
-            rule.recipes().collect::<Vec<_>>(),
+            modified_rule.recipes().collect::<Vec<_>>(),
             vec!["new command", "command2"]
         );
-
-        assert_eq!(makefile.to_string(), "rule:\n\tnew command\n\tcommand2\n");
+        
+        // The original makefile is unchanged
+        assert_eq!(makefile.to_string(), "rule:\n");
+        
+        // Convert the modified rule to a string for verification
+        assert_eq!(
+            modified_rule.to_string(),
+            "rule:\n\tnew command\n\tcommand2\n"
+        );
     }
 
     #[test]

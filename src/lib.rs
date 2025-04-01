@@ -26,38 +26,71 @@ mod parse;
 
 pub use parse::{Error, Identifier, Include, Makefile, ParseError, Rule, VariableDefinition};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(non_camel_case_types)]
-#[repr(u16)]
-#[allow(missing_docs)]
+/// Represents all possible syntax elements in a Makefile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 pub enum SyntaxKind {
-    IDENTIFIER = 0,
-    INDENT,
-    TEXT,
+    /// Represents whitespace (spaces, non-indenting tabs)
     WHITESPACE,
+    /// Represents a newline character
     NEWLINE,
-    DOLLAR,
-    LPAREN,
-    RPAREN,
-    QUOTE,
-    BACKSLASH,
-    COMMA,
-    OPERATOR,
-
+    /// Represents an indentation (tab at the beginning of a line)
+    INDENT,
+    /// Represents a comment (starts with #)
     COMMENT,
+    
+    // Operators and punctuation
+    /// Operators like =, :=, ::, etc.
+    OPERATOR,
+    /// The dollar sign $ used in variable references
+    DOLLAR,
+    /// Opening parenthesis (
+    LPAREN,
+    /// Closing parenthesis )
+    RPAREN,
+    /// Comma ,
+    COMMA,
+    /// Backslash character
+    BACKSLASH,
+    /// Special token for backslash followed by newline (line continuation)
+    LINE_CONTINUATION, 
+    
+    // Identifiers
+    /// Variable names, targets, prerequisites
+    IDENTIFIER,
+    /// Quoted strings
+    QUOTE,
+    /// Text content in recipe lines
+    TEXT,
+    
+    // Error
+    /// Represents a syntax error
     ERROR,
-
-    // composite nodes
-    ROOT, // The entire file
-    RULE, // A single rule
-    RECIPE,
+    
+    // Composite nodes
+    /// The root node of the syntax tree (entire file)
+    ROOT,
+    /// A variable definition
     VARIABLE,
+    /// A rule definition
+    RULE,
+    /// An expression (like a variable value)
     EXPR,
-    INDENTED_BLOCK, // Indented lines outside of rules
-
-    // Directives
-    CONDITIONAL,
+    /// A variable reference (like $(VAR))
+    VARIABLE_REF,
+    /// An include directive
     INCLUDE,
+    /// A conditional directive (like ifdef, ifndef, etc.)
+    CONDITIONAL,
+    /// Indented lines outside of rules
+    INDENTED_BLOCK,
+    
+    // Virtual tokens. These tokens are never produced by lexer,
+    // they are inserted by parser to represent higher-level constructs.
+    /// A virtual token representing a tab character
+    TAB,
+    /// A recipe line in a rule
+    RECIPE_LINE,
 }
 
 /// Convert our `SyntaxKind` into the rowan `SyntaxKind`.

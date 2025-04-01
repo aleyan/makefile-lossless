@@ -107,6 +107,24 @@ impl<'a> Lexer<'a> {
                         self.read_while(|c| !Self::is_newline(c)),
                     ));
                 }
+                '\\' => {
+                    // Check if this is a line continuation
+                    self.input.next(); // Consume backslash
+                    
+                    // Peek at the next character
+                    if let Some(&next_c) = self.input.peek() {
+                        if Self::is_newline(next_c) {
+                            // This is a line continuation backslash
+                            return Some((SyntaxKind::LINE_CONTINUATION, "\\".to_string()));
+                        } else {
+                            // Regular backslash in content
+                            return Some((SyntaxKind::BACKSLASH, "\\".to_string()));
+                        }
+                    } else {
+                        // Backslash at end of file
+                        return Some((SyntaxKind::BACKSLASH, "\\".to_string()));
+                    }
+                }
                 _ => {}
             }
 
@@ -145,10 +163,6 @@ impl<'a> Lexer<'a> {
                     ',' => {
                         self.input.next();
                         Some((SyntaxKind::COMMA, ",".to_string()))
-                    }
-                    '\\' => {
-                        self.input.next();
-                        Some((SyntaxKind::BACKSLASH, "\\".to_string()))
                     }
                     _ => {
                         self.input.next();
