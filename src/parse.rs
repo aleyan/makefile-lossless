@@ -2293,4 +2293,307 @@ rule: dependency
         let parsed = parse(patsubst);
         assert!(parsed.errors.is_empty());
     }
+
+    // ISSUE 1: Multiline Variable Handling Tests
+
+    #[test]
+    fn test_multiline_variable_with_backslash() {
+        let content = r#"
+LONG_VAR = This is a long variable \
+    that continues on the next line \
+    and even one more line
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse multiline variable: {:?}", parsed.errors);
+        
+        let makefile = parsed.root();
+        let vars = makefile.variable_definitions().collect::<Vec<_>>();
+        assert_eq!(vars.len(), 1, "Expected 1 variable but found {}", vars.len());
+        let var_value = vars[0].raw_value();
+        assert!(var_value.is_some(), "Variable value is None");
+        assert_eq!(var_value.unwrap(), "This is a long variable that continues on the next line and even one more line");
+    }
+
+    #[test]
+    fn test_multiline_variable_with_mixed_operators() {
+        let content = r#"
+PREFIX ?= /usr/local
+CFLAGS := -Wall -O2 \
+    -I$(PREFIX)/include \
+    -DDEBUG
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse multiline variable with operators: {:?}", parsed.errors);
+        
+        let makefile = parsed.root();
+        let vars = makefile.variable_definitions().collect::<Vec<_>>();
+        assert_eq!(vars.len(), 2);
+    }
+
+    // ISSUE 2: Indented Line Tests
+
+    #[test]
+    fn test_indented_help_text() {
+        let content = r#"
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  build  - Build the project"
+	@echo "  test   - Run tests"
+	@echo "  clean  - Remove build artifacts"
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse indented help text: {:?}", parsed.errors);
+        
+        let makefile = parsed.root();
+        let rules = makefile.rules().collect::<Vec<_>>();
+        assert_eq!(rules.len(), 1);
+        let help_rule = &rules[0];
+        let recipes = help_rule.recipes().collect::<Vec<_>>();
+        assert_eq!(recipes.len(), 4);
+    }
+
+    #[test]
+    fn test_indented_lines_in_conditionals() {
+        let content = r#"
+ifdef DEBUG
+    CFLAGS += -g -DDEBUG
+    # This is a comment inside conditional
+    ifdef VERBOSE
+        CFLAGS += -v
+    endif
+endif
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse indented lines in conditionals: {:?}", parsed.errors);
+    }
+
+    // ISSUE 3: Colon vs Assignment Operators
+
+    #[test]
+    fn test_recipe_with_colon() {
+        let content = r#"
+build:
+	@echo "Building at: $(shell date)"
+	gcc -o program main.c
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse recipe with colon: {:?}", parsed.errors);
+    }
+
+    #[test]
+    fn test_double_colon_rules() {
+        let content = r#"
+%.o :: %.c
+	$(CC) -c $< -o $@
+
+# Double colon allows multiple rules for same target
+all:: prerequisite1
+	@echo "First rule for all"
+
+all:: prerequisite2
+	@echo "Second rule for all"
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse double colon rules: {:?}", parsed.errors);
+    }
+
+    // ISSUE 4: Conditionals and elif Tests
+
+    #[test]
+    fn test_elif_directive() {
+        let content = r#"
+ifeq ($(OS),Windows_NT)
+    TARGET = windows
+elif ifeq ($(OS),Darwin)
+    TARGET = macos
+elif ifeq ($(OS),Linux)
+    TARGET = linux
+else
+    TARGET = unknown
+endif
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse elif directive: {:?}", parsed.errors);
+    }
+
+    #[test]
+    fn test_nested_conditionals() {
+        let content = r#"
+ifdef RELEASE
+    CFLAGS += -O3
+    ifndef DEBUG
+        ifneq ($(ARCH),arm)
+            CFLAGS += -march=native
+        else
+            CFLAGS += -mcpu=cortex-a72
+        endif
+    endif
+endif
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse nested conditionals: {:?}", parsed.errors);
+    }
+
+    // ISSUE 5: Tab vs Space for Recipes
+
+    #[test]
+    fn test_space_indented_recipes() {
+        // This test is expected to fail with current implementation
+        // It should pass once the parser is more flexible with indentation
+        let content = r#"
+build:
+    @echo "Building with spaces instead of tabs"
+    gcc -o program main.c
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse space-indented recipes: {:?}", parsed.errors);
+    }
+
+    // ISSUE 7: Advanced Variable Expansions
+
+    #[test]
+    fn test_complex_variable_functions() {
+        let content = r#"
+FILES := $(shell find . -name "*.c")
+OBJS := $(patsubst %.c,%.o,$(FILES))
+NAME := $(if $(PROGRAM),$(PROGRAM),a.out)
+HEADERS := ${wildcard *.h}
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse complex variable functions: {:?}", parsed.errors);
+    }
+
+    #[test]
+    fn test_nested_variable_expansions() {
+        let content = r#"
+VERSION = 1.0
+PACKAGE = myapp
+TARBALL = $(PACKAGE)-$(VERSION).tar.gz
+INSTALL_PATH = $(shell echo $(PREFIX) | sed 's/\/$//')
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse nested variable expansions: {:?}", parsed.errors);
+    }
+
+    // ISSUE 8: Special Directives
+
+    #[test]
+    fn test_special_directives() {
+        let content = r#"
+.PHONY: all clean
+.SUFFIXES: .c .o .h
+.DEFAULT: all
+.PRECIOUS: %.o
+
+unexport DEBUG
+"#;
+        let parsed = parse(content);
+        assert!(parsed.errors.is_empty(), "Failed to parse special directives: {:?}", parsed.errors);
+    }
+
+    // Comprehensive Test combining multiple issues
+
+    #[test]
+    fn test_comprehensive_real_world_makefile() {
+        let content = r#"
+# Complex real-world makefile snippets
+
+# Variables with multiline definitions
+CFLAGS := -Wall \
+    -Werror \
+    -O3
+
+# Special directives
+.PHONY: all build test clean
+.SUFFIXES: .c .o
+
+# Conditional logic with indentation and elif
+ifdef DEBUG
+    CFLAGS += -g -DDEBUG
+    ifdef VERBOSE
+        CFLAGS += -v
+    endif
+else
+    ifeq ($(ARCH),arm)
+        CFLAGS += -mcpu=cortex-a72
+    elif ifeq ($(ARCH),x86_64)
+        CFLAGS += -march=x86-64
+    elif ifeq ($(ARCH),i386)
+        CFLAGS += -march=i386
+    else
+        # Default architecture flags
+        CFLAGS += -mtune=generic
+    endif
+endif
+
+# Rules with complex recipes containing colons
+build: $(OBJECTS)
+	@echo "Building at time: $(shell date)"
+	$(CC) -o $(TARGET) $(OBJECTS) 
+	@echo "Build complete: $(TARGET)"
+
+# Double-colon rules
+%.o :: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Special variables with functions
+SOURCES := $(shell find $(SRC_DIR) -name "*.c")
+OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
+
+# Help target with indented documentation
+help:
+	@echo "Available targets:"
+	@echo "  all    - Build everything"
+	@echo "  test   - Run tests"
+	@echo "  clean  - Remove build artifacts"
+
+# unexport directive
+unexport MAKEFLAGS
+"#;
+        let parsed = parse(content);
+        
+        // Check if there are no errors (this will fail with current implementation)
+        assert!(parsed.errors.is_empty(), "Failed to parse comprehensive real-world makefile: {:?}", parsed.errors);
+        
+        // Even if the above assertion passes, verify specific features are parsed correctly
+        let makefile = parsed.root();
+        
+        // Check for variables
+        let vars = makefile.variable_definitions().collect::<Vec<_>>();
+        assert!(vars.len() >= 4, "Expected at least 4 variables, found {}", vars.len());
+        
+        // Check for rules
+        let rules = makefile.rules().collect::<Vec<_>>();
+        assert!(rules.len() >= 3, "Expected at least 3 rules, found {}", rules.len());
+        
+        // Check for pattern rule (%.o :: %.c) - this should fail with current implementation
+        let has_pattern_rule = makefile
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == RULE && node.text().to_string().contains("%.o :: %.c"));
+        assert!(has_pattern_rule, "Pattern rule with double-colon not found");
+        
+        // Check for conditionals with elif - this should fail with current implementation
+        let has_elif = makefile
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == CONDITIONAL && node.text().to_string().contains("elif"));
+        assert!(has_elif, "Conditional with elif not found");
+        
+        // Check for special directive handling (.PHONY, etc.) - this should fail with current implementation
+        let has_phony = makefile
+            .syntax()
+            .descendants()
+            .any(|node| node.text().to_string().contains(".PHONY"));
+        assert!(has_phony, ".PHONY special directive not found");
+        
+        // Check for unexport directive - this should fail with current implementation
+        let has_unexport = makefile
+            .syntax()
+            .descendants()
+            .any(|node| node.text().to_string().contains("unexport"));
+        assert!(has_unexport, "unexport directive not found");
+    }
+
 }
