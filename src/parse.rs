@@ -1428,8 +1428,8 @@ impl Rule {
     /// ```
     /// use makefile_lossless::Rule;
     /// let rule: Rule = "rule: dependency\n\tcommand".parse().unwrap();
-    /// rule.replace_command(0, "new command");
-    /// assert_eq!(rule.recipes().collect::<Vec<_>>(), vec!["new command"]);
+    /// let updated_rule = rule.replace_command(0, "new command").unwrap();
+    /// assert_eq!(updated_rule.recipes().collect::<Vec<_>>(), vec!["new command"]);
     /// ```
     pub fn replace_command(&self, idx: usize, new_command: &str) -> Option<Rule> {
         let recipes: Vec<_> = self
@@ -1505,8 +1505,8 @@ impl Rule {
     /// ```
     /// use makefile_lossless::Rule;
     /// let rule: Rule = "rule: dependency\n\tcommand".parse().unwrap();
-    /// rule.push_command("command2");
-    /// assert_eq!(rule.recipes().collect::<Vec<_>>(), vec!["command", "command2"]);
+    /// let updated_rule = rule.push_command("command2");
+    /// assert_eq!(updated_rule.recipes().collect::<Vec<_>>(), vec!["command", "command2"]);
     /// ```
     pub fn push_command(&self, command: &str) -> Rule {
         let mut builder = GreenNodeBuilder::new();
