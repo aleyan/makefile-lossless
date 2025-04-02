@@ -99,3 +99,4 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
         Self(kind as u16)
     }
 }
+
