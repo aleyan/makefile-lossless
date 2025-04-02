@@ -1217,7 +1217,7 @@ impl Parse {
 
 macro_rules! ast_node {
     ($ast:ident, $kind:ident) => {
-        #[derive(PartialEq, Eq, Hash)]
+        #[derive(Debug, PartialEq, Eq, Hash)]
         #[repr(transparent)]
         /// An AST node for $ast
         pub struct $ast(SyntaxNode);
@@ -1328,7 +1328,7 @@ impl Makefile {
         r.read_to_end(&mut buf)?;
         
         // First try to parse normally
-        let mut normal_result = Makefile::from_bytes(&buf);
+        let normal_result = Makefile::from_bytes(&buf);
         
         if normal_result.is_ok() {
             return normal_result;
@@ -1594,6 +1594,37 @@ impl FromStr for Makefile {
 }
 
 impl Rule {
+    // Helper method to copy nodes into a GreenNodeBuilder
+    fn copy_node_to_builder(node: &SyntaxNode, builder: &mut GreenNodeBuilder<'static>) {
+        builder.start_node(node.kind().into());
+        for token in node.children_with_tokens() {
+            if let Some(token) = token.as_token() {
+                builder.token(token.kind().into(), token.text());
+            } else if let Some(child_node) = token.as_node() {
+                // Recursive case for nested nodes
+                builder.start_node(child_node.kind().into());
+                for subtoken in child_node.children_with_tokens() {
+                    if let Some(subtoken) = subtoken.as_token() {
+                        builder.token(subtoken.kind().into(), subtoken.text());
+                    }
+                }
+                builder.finish_node();
+            }
+        }
+        builder.finish_node();
+    }
+
+    // Helper method to copy all children to a builder
+    fn copy_children_to_builder(&self, builder: &mut GreenNodeBuilder<'static>) {
+        for child in self.syntax().children_with_tokens() {
+            if let Some(node) = child.as_node() {
+                Self::copy_node_to_builder(node, builder);
+            } else if let Some(token) = child.as_token() {
+                builder.token(token.kind().into(), token.text());
+            }
+        }
+    }
+
     // Helper method to collect variable references from tokens
     fn collect_variable_reference(
         &self,
@@ -1833,36 +1864,13 @@ impl Rule {
                         builder.token(NEWLINE.into(), "\n");
                         builder.finish_node();
                     } else {
-                        // Copy this recipe as-is by rebuilding it
-                        builder.start_node(RECIPE_LINE.into());
-                        // Manually add each token in the recipe
-                        for token in node.children_with_tokens() {
-                            if let Some(token) = token.as_token() {
-                                builder.token(token.kind().into(), token.text());
-                            }
-                        }
-                        builder.finish_node();
+                        // Copy this recipe as-is
+                        Self::copy_node_to_builder(node, &mut builder);
                     }
                     recipe_idx += 1;
                 } else {
-                    // Copy non-recipe node as-is by rebuilding it
-                    builder.start_node(node.kind().into());
-                    // Recurse through node structure
-                    for token in node.children_with_tokens() {
-                        if let Some(token) = token.as_token() {
-                            builder.token(token.kind().into(), token.text());
-                        } else if let Some(child_node) = token.as_node() {
-                            // Recursive case for nested nodes
-                            builder.start_node(child_node.kind().into());
-                            for subtoken in child_node.children_with_tokens() {
-                                if let Some(subtoken) = subtoken.as_token() {
-                                    builder.token(subtoken.kind().into(), subtoken.text());
-                                }
-                            }
-                            builder.finish_node();
-                        }
-                    }
-                    builder.finish_node();
+                    // Copy non-recipe node as-is
+                    Self::copy_node_to_builder(node, &mut builder);
                 }
             } else if let Some(token) = child.as_token() {
                 builder.token(token.kind().into(), token.text());
@@ -1887,29 +1895,8 @@ impl Rule {
         let mut builder = GreenNodeBuilder::new();
         builder.start_node(RULE.into());
 
-        // First, copy all existing children, including RECIPE_LINE nodes
-        for child in self.syntax().children_with_tokens() {
-            if let Some(node) = child.as_node() {
-                // Copy node by rebuilding it
-                builder.start_node(node.kind().into());
-                for token in node.children_with_tokens() {
-                    if let Some(token) = token.as_token() {
-                        builder.token(token.kind().into(), token.text());
-                    } else if let Some(child_node) = token.as_node() {
-                        builder.start_node(child_node.kind().into());
-                        for child_token in child_node.children_with_tokens() {
-                            if let Some(token) = child_token.as_token() {
-                                builder.token(token.kind().into(), token.text());
-                            }
-                        }
-                        builder.finish_node();
-                    }
-                }
-                builder.finish_node();
-            } else if let Some(token) = child.as_token() {
-                builder.token(token.kind().into(), token.text());
-            }
-        }
+        // First, copy all existing children
+        self.copy_children_to_builder(&mut builder);
 
         // Add the new recipe line at the end
         builder.start_node(RECIPE_LINE.into());

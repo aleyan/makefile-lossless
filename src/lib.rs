@@ -30,41 +30,66 @@ pub use parse::{Error, Identifier, Include, Makefile, ParseError, Rule, Variable
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 pub enum SyntaxKind {
+    /// Whitespace token (spaces, tabs outside of recipe context)
     WHITESPACE,
+    /// Newline token (line endings)
     NEWLINE,
+    /// Indentation token (tab or spaces at beginning of line)
     INDENT,
+    /// Comment token (lines starting with #)
     COMMENT,
     
     // Operators and punctuation
+    /// Operator token (=, :=, +=, etc. for variables and : for rules)
     OPERATOR,
+    /// Dollar sign token for variable references
     DOLLAR,
+    /// Left parenthesis token
     LPAREN,
+    /// Right parenthesis token
     RPAREN,
+    /// Comma token
     COMMA,
+    /// Backslash token
     BACKSLASH,
+    /// Line continuation token (backslash followed by newline)
     LINE_CONTINUATION, 
     
     // Identifiers
+    /// Identifier token (names, targets, prerequisites)
     IDENTIFIER,
+    /// Quote token (single or double quotes)
     QUOTE,
+    /// Raw text token (used in recipe lines)
     TEXT,
     
     // Error
+    /// Error token for syntax errors
     ERROR,
     
     // Composite nodes
+    /// Root node of the syntax tree representing the entire makefile
     ROOT,
+    /// Variable definition node (name = value)
     VARIABLE,
+    /// Rule node (target: prerequisites)
     RULE,
+    /// Expression node (for variable values and other expressions)
     EXPR,
+    /// Variable reference node (e.g. $(VARIABLE))
     VARIABLE_REF,
+    /// Include directive node (include, -include, sinclude)
     INCLUDE,
+    /// Conditional directive node (ifdef, ifndef, etc.)
     CONDITIONAL,
+    /// Indented block node (blocks of indented text)
     INDENTED_BLOCK,
     
     // Virtual tokens. These tokens are never produced by lexer,
     // they are inserted by parser to represent higher-level constructs.
+    /// Tab character inserted by parser
     TAB,
+    /// Recipe line in a rule (indented commands)
     RECIPE_LINE,
 }
 
