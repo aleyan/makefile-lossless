@@ -143,9 +143,9 @@ fn parse(text: &str) -> Parse {
             let continuations_involved = match self.current() {
                 Some(LINE_CONTINUATION) => true,
                 Some(_) => false,
-                None => false
+                None => false,
             };
-            
+
             // Skip reporting errors for line continuations in variable definitions
             // which are often misinterpreted as rule target issues
             if msg == "expected ':'" && continuations_involved {
@@ -155,7 +155,7 @@ fn parse(text: &str) -> Parse {
                 }
                 return;
             }
-            
+
             // Check for indented line errors - they may need special handling
             if msg == "indented line not part of a rule" && self.current() == Some(INDENT) {
                 // We'll convert this to an INDENTED_BLOCK instead of an error in some cases
@@ -240,27 +240,27 @@ fn parse(text: &str) -> Parse {
 
             self.builder.finish_node();
         }
-        
+
         fn parse_indented_block(&mut self) {
             self.builder.start_node(INDENTED_BLOCK.into());
-            
+
             // Consume the initial indent (tab or spaces)
             if self.current() == Some(INDENT) || self.current() == Some(WHITESPACE) {
                 self.bump();
             } else {
                 self.error("expected indented line to start with whitespace".into());
             }
-            
+
             // Parse the rest of the line
             while self.current().is_some() && self.current() != Some(NEWLINE) {
                 self.bump();
             }
-            
+
             // Consume the newline if present
             if self.current() == Some(NEWLINE) {
                 self.bump();
             }
-            
+
             self.builder.finish_node();
         }
 
@@ -406,7 +406,7 @@ fn parse(text: &str) -> Parse {
 
                         // Parse value
                         self.builder.start_node(EXPR.into());
-                        
+
                         // Process tokens until we reach end of variable definition
                         while self.current().is_some() {
                             match self.current() {
@@ -414,31 +414,33 @@ fn parse(text: &str) -> Parse {
                                 Some(LINE_CONTINUATION) => {
                                     // Include the continuation token in the output for accurate reconstruction
                                     self.bump();
-                                    
+
                                     // Consume the newline token if it exists
                                     if self.current() == Some(NEWLINE) {
                                         self.bump();
-                                        
+
                                         // Handle indentation at the next line if present
-                                        if self.current() == Some(WHITESPACE) || self.current() == Some(INDENT) {
+                                        if self.current() == Some(WHITESPACE)
+                                            || self.current() == Some(INDENT)
+                                        {
                                             self.bump();
                                         }
                                     }
-                                },
-                                
+                                }
+
                                 // Handle normal newlines (not preceded by backslash)
                                 Some(NEWLINE) => {
                                     // End of variable definition
                                     break;
-                                },
-                                
+                                }
+
                                 // Handle everything else - just consume the token
                                 _ => {
                                     self.bump();
                                 }
                             }
                         }
-                        
+
                         self.builder.finish_node();
 
                         // Expect newline at the end of variable definition
@@ -469,7 +471,7 @@ fn parse(text: &str) -> Parse {
                 Some(LPAREN) => {
                     self.bump();
                     let paren_count = self.consume_balanced_parens(1);
-                    
+
                     // If we couldn't balance the parens and we're at EOF, handle the case gracefully
                     if paren_count > 0 && self.current().is_none() {
                         // This is likely a variable reference at the end of the file
@@ -486,7 +488,7 @@ fn parse(text: &str) -> Parse {
                     // We'll consume it but report an error
                     self.error("unexpected whitespace in variable reference".into());
                     self.bump();
-                    
+
                     // Try to recover by looking for an identifier or lparen after whitespace
                     if self.current() == Some(IDENTIFIER) || self.current() == Some(LPAREN) {
                         // Continue with the variable reference
@@ -512,10 +514,10 @@ fn parse(text: &str) -> Parse {
 
             self.builder.finish_node();
         }
-        
+
         fn parse_include(&mut self) {
             self.builder.start_node(INCLUDE.into());
-            
+
             // Consume include keyword variant
             if self.current() != Some(IDENTIFIER)
                 || (!["include", "-include", "sinclude"]
@@ -527,11 +529,11 @@ fn parse(text: &str) -> Parse {
             }
             self.bump();
             self.skip_ws();
-            
+
             // Parse file paths
             self.builder.start_node(EXPR.into());
             let mut found_path = false;
-            
+
             while self.current().is_some() && self.current() != Some(NEWLINE) {
                 match self.current() {
                     Some(WHITESPACE) => self.skip_ws(),
@@ -547,13 +549,13 @@ fn parse(text: &str) -> Parse {
                     None => break,
                 }
             }
-            
+
             if !found_path {
                 self.error("expected file path after include".into());
             }
-            
+
             self.builder.finish_node();
-            
+
             // Expect newline
             if self.current() == Some(NEWLINE) {
                 self.bump();
@@ -561,24 +563,24 @@ fn parse(text: &str) -> Parse {
                 self.error("expected newline after include".into());
                 self.skip_until_newline();
             }
-            
+
             self.builder.finish_node();
         }
-        
+
         fn parse_conditional(&mut self) {
             self.builder.start_node(CONDITIONAL.into());
-            
+
             // Handle the opening directive
             if self.current() != Some(IDENTIFIER) {
                 self.error("expected conditional directive".into());
                 self.builder.finish_node();
                 return;
             }
-            
+
             let directive = self.tokens.last().unwrap().1.clone();
             self.bump();
             self.skip_ws();
-            
+
             // Parse condition for if directives
             if directive.starts_with("if") {
                 if directive == "ifeq" || directive == "ifneq" {
@@ -586,18 +588,21 @@ fn parse(text: &str) -> Parse {
                 } else if directive == "ifdef" || directive == "ifndef" {
                     // For ifdef/ifndef, parse a simple condition
                     self.builder.start_node(EXPR.into());
-                    
+
                     // Check if there's a condition
-                    if self.current().is_some() && self.current() != Some(NEWLINE) && self.current() != Some(COMMENT) {
+                    if self.current().is_some()
+                        && self.current() != Some(NEWLINE)
+                        && self.current() != Some(COMMENT)
+                    {
                         while self.current().is_some() && self.current() != Some(NEWLINE) {
                             self.bump();
                         }
                     } else {
                         self.error("missing condition after ifdef/ifndef".into());
                     }
-                    
+
                     self.builder.finish_node();
-                    
+
                     if self.current() == Some(NEWLINE) {
                         self.bump();
                     }
@@ -615,7 +620,7 @@ fn parse(text: &str) -> Parse {
                     self.bump();
                 }
             }
-            
+
             // Special handling for conditional body to avoid errors
             // For test compatibility, we'll be more permissive inside conditionals
             if directive.starts_with("if") {
@@ -634,7 +639,9 @@ fn parse(text: &str) -> Parse {
                                     // This else/elif belongs to our if
                                     self.bump();
                                     // Handle any tokens after else/elif
-                                    while self.current().is_some() && self.current() != Some(NEWLINE) {
+                                    while self.current().is_some()
+                                        && self.current() != Some(NEWLINE)
+                                    {
                                         self.bump();
                                     }
                                     if self.current() == Some(NEWLINE) {
@@ -653,7 +660,10 @@ fn parse(text: &str) -> Parse {
                                 if self.current() == Some(NEWLINE) {
                                     self.bump();
                                 }
-                            } else if token == "include" || token == "-include" || token == "sinclude" {
+                            } else if token == "include"
+                                || token == "-include"
+                                || token == "sinclude"
+                            {
                                 // Handle includes inside conditionals
                                 self.parse_include();
                             } else {
@@ -681,17 +691,17 @@ fn parse(text: &str) -> Parse {
                     }
                 }
             }
-            
+
             self.builder.finish_node();
         }
-        
+
         fn parse_parenthesized_expr(&mut self) {
             self.builder.start_node(EXPR.into());
-            
+
             // Check for opening parenthesis
             if self.current() == Some(LPAREN) {
                 self.bump();
-                
+
                 // Parse everything until the matching closing parenthesis
                 let mut depth = 1;
                 while depth > 0 && self.current().is_some() {
@@ -720,9 +730,9 @@ fn parse(text: &str) -> Parse {
             } else {
                 self.error("expected '(' after ifeq/ifneq".into());
             }
-            
+
             self.builder.finish_node();
-            
+
             // Expect newline
             if self.current() == Some(NEWLINE) {
                 self.bump();
@@ -731,7 +741,7 @@ fn parse(text: &str) -> Parse {
                 self.skip_until_newline();
             }
         }
-        
+
         fn parse_normal_content(&mut self) {
             // Handle assignment or rule
             if self.is_assignment_line() {
@@ -745,10 +755,24 @@ fn parse(text: &str) -> Parse {
                         if token == "include" || token == "-include" || token == "sinclude" {
                             self.parse_include();
                             return;
-                        } else if token == "if" || token == "ifdef" || token == "ifndef" || token == "ifeq" || token == "ifneq" || token == "else" || token == "endif" || token == "elif" {
+                        } else if token == "if"
+                            || token == "ifdef"
+                            || token == "ifndef"
+                            || token == "ifeq"
+                            || token == "ifneq"
+                            || token == "else"
+                            || token == "endif"
+                            || token == "elif"
+                        {
                             self.parse_conditional();
                             return;
-                        } else if token.starts_with("if") && token != "if" && token != "ifdef" && token != "ifndef" && token != "ifeq" && token != "ifneq" {
+                        } else if token.starts_with("if")
+                            && token != "if"
+                            && token != "ifdef"
+                            && token != "ifndef"
+                            && token != "ifeq"
+                            && token != "ifneq"
+                        {
                             // Handle invalid if directives
                             self.error(format!("unknown conditional directive: {}", token));
                             self.skip_until_newline();
@@ -767,7 +791,7 @@ fn parse(text: &str) -> Parse {
                     Some(NEWLINE) => false,
                     _ => true,
                 };
-                
+
                 if is_rule_start {
                     self.parse_rule();
                 } else {
@@ -776,18 +800,18 @@ fn parse(text: &str) -> Parse {
                 }
             }
         }
-        
+
         fn is_assignment_line(&self) -> bool {
             let mut i = self.tokens.len();
             let mut saw_identifier = false;
             let mut saw_equals = false;
             let mut in_line_continuation = false;
             let mut tokens_before_equals = Vec::new();
-            
+
             while i > 0 {
                 i -= 1;
                 let (kind, text) = &self.tokens[i];
-                
+
                 match kind {
                     NEWLINE => {
                         // If we're in a line continuation, skip this newline
@@ -797,45 +821,45 @@ fn parse(text: &str) -> Parse {
                             // Not in a line continuation, this is the line start
                             break;
                         }
-                    },
+                    }
                     LINE_CONTINUATION => {
                         // Found a line continuation token - set the flag
                         in_line_continuation = true;
-                    },
+                    }
                     IDENTIFIER => {
                         saw_identifier = true;
                         if !saw_equals {
                             tokens_before_equals.push((kind, text));
                         }
-                    },
+                    }
                     OPERATOR => {
                         if text.contains('=') {
                             // Found an equals sign - this is likely an assignment
                             saw_equals = true;
                         } else if text == ":" && !saw_equals {
                             // Found a colon with no equals - check if this is a rule or a variable with colon
-                            
+
                             // If the colon is preceded by whitespace or followed by whitespace,
                             // it's more likely to be a rule separator
-                            let is_isolated_colon = 
-                                (i > 0 && self.tokens[i-1].0 == WHITESPACE) ||
-                                (i < self.tokens.len() - 1 && self.tokens[i+1].0 == WHITESPACE);
-                            
+                            let is_isolated_colon = (i > 0 && self.tokens[i - 1].0 == WHITESPACE)
+                                || (i < self.tokens.len() - 1
+                                    && self.tokens[i + 1].0 == WHITESPACE);
+
                             // Rules typically have a colon directly after an identifier
                             // e.g., "target:"
                             if is_isolated_colon && saw_identifier {
                                 // This is likely a rule, not an assignment
                                 return false;
                             }
-                            
+
                             // Otherwise, it could be a variable with a colon in the name
                             // (like URL:HOST), so keep checking
                         }
-                        
+
                         if !saw_equals {
                             tokens_before_equals.push((kind, text));
                         }
-                    },
+                    }
                     _ => {
                         if !saw_equals {
                             tokens_before_equals.push((kind, text));
@@ -843,12 +867,12 @@ fn parse(text: &str) -> Parse {
                     }
                 }
             }
-            
+
             // If we saw both an identifier and an equals sign, it's likely an assignment
             if saw_identifier && saw_equals {
                 return true;
             }
-            
+
             // Otherwise, it's not an assignment
             false
         }
@@ -874,17 +898,31 @@ fn parse(text: &str) -> Parse {
                     if token == "include" || token == "-include" || token == "sinclude" {
                         self.parse_include();
                         true
-                    } else if token == "if" || token == "ifdef" || token == "ifndef" || token == "ifeq" || token == "ifneq" || token == "else" || token == "endif" || token == "elif" {
+                    } else if token == "if"
+                        || token == "ifdef"
+                        || token == "ifndef"
+                        || token == "ifeq"
+                        || token == "ifneq"
+                        || token == "else"
+                        || token == "endif"
+                        || token == "elif"
+                    {
                         self.parse_conditional();
                         true
-                    } else if token.starts_with("if") && token != "if" && token != "ifdef" && token != "ifndef" && token != "ifeq" && token != "ifneq" {
+                    } else if token.starts_with("if")
+                        && token != "if"
+                        && token != "ifdef"
+                        && token != "ifndef"
+                        && token != "ifeq"
+                        && token != "ifneq"
+                    {
                         // Handle invalid if directives
                         self.error(format!("unknown conditional directive: {}", token));
                         self.skip_until_newline();
                         true
                     } else if self.tokens.len() > 1
                         && (self.tokens[self.tokens.len() - 1].1 == "export"
-                        || self.tokens[self.tokens.len() - 1].1 == "unexport")
+                            || self.tokens[self.tokens.len() - 1].1 == "unexport")
                     {
                         // Handle export/unexport statements
                         self.parse_assignment();
@@ -908,8 +946,10 @@ fn parse(text: &str) -> Parse {
                 }
                 Some(WHITESPACE) => {
                     // Check if it's a space-indented line at the beginning of a line
-                    if self.tokens.last().unwrap().1.trim().is_empty() && 
-                       (self.tokens.len() <= 1 || self.tokens[self.tokens.len() - 2].0 == NEWLINE) {
+                    if self.tokens.last().unwrap().1.trim().is_empty()
+                        && (self.tokens.len() <= 1
+                            || self.tokens[self.tokens.len() - 2].0 == NEWLINE)
+                    {
                         // Space-indented lines are often documentation or non-recipe indented content
                         if self.is_in_indented_block_context() || self.is_in_conditional_context() {
                             self.parse_indented_block();
@@ -927,7 +967,7 @@ fn parse(text: &str) -> Parse {
                     let in_rule_context = self.is_in_rule_context();
                     let in_indented_block_context = self.is_in_indented_block_context();
                     let in_conditional_context = self.is_in_conditional_context();
-                    
+
                     if in_rule_context {
                         // We're in a rule context, so this should be a recipe line
                         self.parse_recipe_line();
@@ -943,7 +983,7 @@ fn parse(text: &str) -> Parse {
                             line: line_number,
                             context,
                         });
-                        
+
                         // Skip the indentation and continue parsing as normal text
                         self.bump();
                         self.parse_normal_content();
@@ -1036,15 +1076,15 @@ fn parse(text: &str) -> Parse {
         }
 
         fn is_in_rule_context(&self) -> bool {
-            // Simple heuristic: We're in a rule context if the last non-whitespace/non-newline 
+            // Simple heuristic: We're in a rule context if the last non-whitespace/non-newline
             // token was a colon and there's been no empty line since
             let mut i = self.tokens.len();
             let mut newline_count = 0;
-            
+
             while i > 0 {
                 i -= 1;
                 let (kind, text) = &self.tokens[i];
-                
+
                 match kind {
                     NEWLINE => {
                         newline_count += 1;
@@ -1060,7 +1100,7 @@ fn parse(text: &str) -> Parse {
                     _ => {}
                 }
             }
-            
+
             false
         }
 
@@ -1075,23 +1115,24 @@ fn parse(text: &str) -> Parse {
             let mut consecutive_newlines = 0;
             let mut target_seen = false;
             let mut last_target_pos = 0;
-            
+
             // First, quick check if we're at the start of the file
             if i <= 1 {
                 // If we're at the start of the file (or have only seen one token),
                 // this can't be a recipe line
                 return true;
             }
-            
-            while i > 0 && newline_count < 5 { // Look back more lines to be safer
+
+            while i > 0 && newline_count < 5 {
+                // Look back more lines to be safer
                 i -= 1;
                 let (kind, text) = &self.tokens[i];
-                
+
                 match kind {
                     NEWLINE => {
                         newline_count += 1;
                         consecutive_newlines += 1;
-                        
+
                         // If we see multiple consecutive newlines before finding a colon,
                         // it's likely this is not part of a rule
                         if consecutive_newlines > 1 && !has_rule_colon {
@@ -1107,12 +1148,12 @@ fn parse(text: &str) -> Parse {
                         // If we find a colon, it means we're in a rule context
                         has_rule_colon = true;
                         consecutive_newlines = 0;
-                        
+
                         // If there were no newlines after the colon, this is definitely a recipe line
                         if newline_count == 0 {
                             return false;
                         }
-                        
+
                         // Check if we've seen a target recently before this colon
                         // The token indices are in reverse order (most recent tokens have higher indices)
                         if target_seen && last_target_pos > i && (last_target_pos - i) < 3 {
@@ -1128,7 +1169,7 @@ fn parse(text: &str) -> Parse {
                         target_seen = true;
                         last_target_pos = i;
                         consecutive_newlines = 0;
-                        
+
                         // Special case: check if this is a target in a ".PHONY: target" type line
                         // which often has indented documentation following it
                         if text.starts_with('.') && i > 0 {
@@ -1139,7 +1180,7 @@ fn parse(text: &str) -> Parse {
                     WHITESPACE => {
                         // Don't reset consecutive_newlines for whitespace
                         // But also check if this is a line with only whitespace
-                        if i > 0 && self.tokens[i-1].0 == NEWLINE {
+                        if i > 0 && self.tokens[i - 1].0 == NEWLINE {
                             // Line with only whitespace counts as an empty line
                             consecutive_newlines += 1;
                         }
@@ -1149,34 +1190,39 @@ fn parse(text: &str) -> Parse {
                     }
                 }
             }
-            
+
             // Context-based decision:
             // 1. If we've found comments, this is likely documentation
             // 2. If we're inside a conditional, indented blocks are common
             // 3. If we haven't seen any rule colon, this isn't a recipe
             // 4. If we've seen several empty lines after a rule, it's likely a new context
-            has_comment_before || 
-            self.is_in_conditional_context() || 
-            !has_rule_colon || 
-            consecutive_newlines > 1
+            has_comment_before
+                || self.is_in_conditional_context()
+                || !has_rule_colon
+                || consecutive_newlines > 1
         }
-        
+
         // Check if we're inside a conditional directive
         fn is_in_conditional_context(&self) -> bool {
             // Look for conditional tokens like "if", "ifdef", etc. without a matching "endif"
             let mut if_count = 0;
             let mut endif_count = 0;
-            
+
             for (kind, text) in &self.tokens {
                 if *kind == IDENTIFIER {
-                    if text == "if" || text == "ifdef" || text == "ifndef" || text == "ifeq" || text == "ifneq" {
+                    if text == "if"
+                        || text == "ifdef"
+                        || text == "ifndef"
+                        || text == "ifeq"
+                        || text == "ifneq"
+                    {
                         if_count += 1;
                     } else if text == "endif" {
                         endif_count += 1;
                     }
                 }
             }
-            
+
             // If we have more if directives than endif directives, we're inside a conditional
             if_count > endif_count
         }
@@ -1280,24 +1326,24 @@ impl VariableDefinition {
                 let raw_text = expr.text().to_string();
                 let mut result = String::with_capacity(raw_text.len());
                 let mut chars = raw_text.chars().peekable();
-                
+
                 while let Some(c) = chars.next() {
                     match c {
                         // Handle backslash line continuation
                         '\\' if chars.peek() == Some(&'\n') => {
                             chars.next(); // Skip the newline
-                            // Skip whitespace at the beginning of the next line
+                                          // Skip whitespace at the beginning of the next line
                             while matches!(chars.peek(), Some(' ' | '\t')) {
                                 chars.next();
                             }
-                        },
+                        }
                         // Replace newlines with spaces
                         '\n' => result.push(' '),
                         // Regular character
                         _ => result.push(c),
                     }
                 }
-                
+
                 result.trim().to_string()
             })
     }
@@ -1326,22 +1372,23 @@ impl Makefile {
     pub fn read_relaxed<R: std::io::Read>(mut r: R) -> Result<Makefile, Error> {
         let mut buf = Vec::new();
         r.read_to_end(&mut buf)?;
-        
+
         // First try to parse normally
         let normal_result = Makefile::from_bytes(&buf);
-        
+
         if normal_result.is_ok() {
             return normal_result;
         }
-        
+
         // If normal parsing fails, try the very relaxed parser that handles even damaged files
         if let Err(Error::Parse(parse_error)) = &normal_result {
             // Check if the error is related to a variable reference at EOF
             let eof_var_ref_error = parse_error.errors.iter().any(|err| {
-                err.message.contains("variable reference") && 
-                (err.message.contains("unexpected token") || err.message.contains("unclosed"))
+                err.message.contains("variable reference")
+                    && (err.message.contains("unexpected token")
+                        || err.message.contains("unclosed"))
             });
-            
+
             if eof_var_ref_error {
                 // Try to handle variable references at EOF more gracefully
                 let text = String::from_utf8_lossy(&buf);
@@ -1351,25 +1398,25 @@ impl Makefile {
                 }
             }
         }
-        
+
         // Return the original error if our special handling didn't work
         normal_result
     }
-    
+
     // A more relaxed parser specifically for handling EOF after variable references
     fn relaxed_parse_with_eof_handling(text: &str) -> Result<Makefile, Error> {
         // Build a slightly modified version of the text to help the parser
         let mut modified_text = text.to_string();
-        
+
         // Check if the text ends with a variable reference pattern
         let trimmed = modified_text.trim_end();
-        
+
         // Looking for patterns like $(VAR) or $VAR at the end with no trailing newline
         if trimmed.ends_with(')') {
             // Look for opening parenthesis
             let mut paren_depth = 0;
             let mut dollar_pos = None;
-            
+
             // Scan backward to find opening paren and $ sign
             for (i, c) in trimmed.char_indices().rev() {
                 if c == ')' {
@@ -1382,26 +1429,28 @@ impl Makefile {
                         modified_text.push('\n');
                         break;
                     }
-                } else if c == '$' && i > 0 && (modified_text.as_bytes()[i-1] as char) != '$' {
+                } else if c == '$' && i > 0 && (modified_text.as_bytes()[i - 1] as char) != '$' {
                     // Found a $ that's not escaped
                     dollar_pos = Some(i);
                 }
             }
         } else if let Some(pos) = trimmed.rfind('$') {
             // Check if there's a single character variable reference at the end
-            let after_dollar = &trimmed[pos+1..];
+            let after_dollar = &trimmed[pos + 1..];
             if after_dollar.len() == 1 || after_dollar.starts_with('{') {
                 // Single-character variable reference or curly brace
                 modified_text.push('\n');
             }
         }
-        
+
         // Try parsing with the modified text
         let parse_result = parse(&modified_text);
         if !parse_result.errors.is_empty() {
-            return Err(Error::Parse(ParseError { errors: parse_result.errors }));
+            return Err(Error::Parse(ParseError {
+                errors: parse_result.errors,
+            }));
         }
-        
+
         Ok(parse_result.root())
     }
 
@@ -1705,16 +1754,20 @@ impl Rule {
         let mut result = Vec::new();
         let mut tokens = self.syntax().children_with_tokens().peekable();
         let found_colon = false;
-        
+
         // When parsing targets, we need to handle the case where the colon might be part of the
         // target identifier (e.g., "rule:") or it might be a separate token (e.g., "rule" ":")
         while let Some(token) = tokens.peek().cloned() {
             // Stop if we encounter a colon or have already found one
-            if found_colon || (token.as_token().map_or(false, |t| t.kind() == OPERATOR && t.text() == ":")) {
+            if found_colon
+                || (token
+                    .as_token()
+                    .map_or(false, |t| t.kind() == OPERATOR && t.text() == ":"))
+            {
                 tokens.next(); // Skip over the colon
                 break;
             }
-            
+
             if let Some(node) = token.as_node() {
                 tokens.next(); // Consume the node
                 if node.kind() == EXPR {
@@ -1752,7 +1805,7 @@ impl Rule {
                 }
             }
         }
-        
+
         result.into_iter()
     }
 
@@ -2154,28 +2207,28 @@ rule: dependency
     fn test_push_command() {
         let mut makefile = Makefile::new();
         let rule = makefile.add_rule("rule");
-        
+
         // Create a new rule with the first command added
         let rule_with_cmd1 = rule.push_command("command");
         // Create a new rule with the second command added
         let rule_with_both = rule_with_cmd1.push_command("command2");
-        
+
         // Check the commands in the modified rule
         assert_eq!(
             rule_with_both.recipes().collect::<Vec<_>>(),
             vec!["command", "command2"]
         );
-        
+
         // Add a third command
         let rule_with_all = rule_with_both.push_command("command3");
         assert_eq!(
             rule_with_all.recipes().collect::<Vec<_>>(),
             vec!["command", "command2", "command3"]
         );
-        
+
         // The original makefile is unchanged
         assert_eq!(makefile.to_string(), "rule:\n");
-        
+
         // Convert the modified rule to a string for verification
         assert_eq!(
             rule_with_all.to_string(),
@@ -2187,28 +2240,28 @@ rule: dependency
     fn test_replace_command() {
         let mut makefile = Makefile::new();
         let rule = makefile.add_rule("rule");
-        
+
         // Create a new rule with the first command added
         let rule_with_cmd1 = rule.push_command("command");
         // Create a new rule with the second command added
         let rule_with_both = rule_with_cmd1.push_command("command2");
-        
+
         // Check the commands in the modified rule
         assert_eq!(
             rule_with_both.recipes().collect::<Vec<_>>(),
             vec!["command", "command2"]
         );
-        
+
         // Replace the first command
         let modified_rule = rule_with_both.replace_command(0, "new command").unwrap();
         assert_eq!(
             modified_rule.recipes().collect::<Vec<_>>(),
             vec!["new command", "command2"]
         );
-        
+
         // The original makefile is unchanged
         assert_eq!(makefile.to_string(), "rule:\n");
-        
+
         // Convert the modified rule to a string for verification
         assert_eq!(
             modified_rule.to_string(),
@@ -2331,7 +2384,11 @@ rule: dependency
 
         // Verify error is detected with correct details
         assert_eq!(direct_error.line, 2);
-        assert!(direct_error.message.contains("expected"), "Error message should contain 'expected': {}", direct_error.message);
+        assert!(
+            direct_error.message.contains("expected"),
+            "Error message should contain 'expected': {}",
+            direct_error.message
+        );
         assert_eq!(direct_error.context, "\tcommand");
 
         // Check public API
@@ -2369,26 +2426,32 @@ rule: dependency
             Ok(makefile) => {
                 // If it parses successfully, that's fine too - our parser is more robust now
                 println!("Successfully parsed unusual characters");
-                
+
                 // Just assert something about the parsed content to make the test pass
-                assert!(makefile.rules().count() == 0, "Should not have found any rules");
-            },
+                assert!(
+                    makefile.rules().count() == 0,
+                    "Should not have found any rules"
+                );
+            }
             Err(err) => match err {
                 self::Error::Parse(error) => {
                     // If we still get errors, make sure they're properly reported
                     println!("Error: {:?}", error);
                     println!("Error line: {}", error.errors[0].line);
                     println!("Error context: {:?}", error.errors[0].context);
-                    
+
                     // Line number should be reasonable (where the unusual chars or tab is)
                     assert!(error.errors[0].line >= 2, "Error line should be at least 2");
                     // Context should contain some indication of what was wrong
-                    assert!(!error.errors[0].context.is_empty(), "Error context should not be empty");
+                    assert!(
+                        !error.errors[0].context.is_empty(),
+                        "Error context should not be empty"
+                    );
                 }
                 _ => panic!("Unexpected error type"),
             },
         };
-        
+
         // The test now passes whether we get an error or not, so this is no longer needed
         // assert_eq!(reader_error.errors[0].line, 3);
         // assert_eq!(reader_error.errors[0].context, "#end comment");
@@ -2414,8 +2477,8 @@ rule: dependency
     fn test_line_number_calculation() {
         // Test various locations for errors
         let test_cases = [
-            ("rule dependency\n\tcommand", 2), // Missing colon
-            ("#comment\n\t(╯°□°)╯︵ ┻━┻", 2),  // Strange characters
+            ("rule dependency\n\tcommand", 2),             // Missing colon
+            ("#comment\n\t(╯°□°)╯︵ ┻━┻", 2),              // Strange characters
             ("var = value\n#comment\n\tindented line", 3), // Indented line not part of a rule
         ];
 
@@ -2434,14 +2497,22 @@ rule: dependency
                 Err(err) => {
                     // Check error details only if we actually got an error
                     println!("Error message: {}", err.errors[0].message);
-                    println!("Error line: {}, expected: {}", err.errors[0].line, expected_line);
+                    println!(
+                        "Error line: {}, expected: {}",
+                        err.errors[0].line, expected_line
+                    );
                     println!("Error context: {:?}", err.errors[0].context);
-                    
-                    assert_eq!(err.errors[0].line, expected_line, "Line number should match the expected line");
+
+                    assert_eq!(
+                        err.errors[0].line, expected_line,
+                        "Line number should match the expected line"
+                    );
                     // Only check for tab if the error is about indentation
                     if err.errors[0].message.contains("indented") {
-                        assert!(err.errors[0].context.starts_with('\t'), 
-                               "Context for indentation errors should include the tab character");
+                        assert!(
+                            err.errors[0].context.starts_with('\t'),
+                            "Context for indentation errors should include the tab character"
+                        );
                     }
                 }
             }
@@ -2476,7 +2547,7 @@ rule: dependency
         // Conditionals with rules
         let parsed = parse("ifdef DEBUG\ntest: debug.o\n\t$(CC) -o $@ $^\nendif\n");
         assert!(parsed.errors.is_empty());
-        
+
         // Basic include test - this should work
         let parsed = parse("include simple.mk\n");
         assert!(parsed.errors.is_empty());
@@ -2629,12 +2700,12 @@ rule: dependency
         let conditional = "ifdef DEBUG\nCFLAGS = -g\nelse\nCFLAGS = -O2\nendif\n";
         let parsed = parse(conditional);
         assert!(parsed.errors.is_empty());
-        
+
         // ifdef with nested ifdef
         let nested = "ifdef DEBUG\nCFLAGS = -g\nifdef VERBOSE\nCFLAGS += -v\nendif\nendif\n";
         let parsed = parse(nested);
         assert!(parsed.errors.is_empty());
-        
+
         // ifeq form
         let ifeq = "ifeq ($(OS),Windows_NT)\nTARGET = app.exe\nelse\nTARGET = app\nendif\n";
         let parsed = parse(ifeq);
@@ -2647,12 +2718,12 @@ rule: dependency
         let help_text = "help:\n\t@echo \"Available targets:\"\n\t@echo \"  help     show help\"\n";
         let parsed = parse(help_text);
         assert!(parsed.errors.is_empty());
-        
+
         // Verify recipes are correctly parsed
         let root = parsed.root();
         let rules = root.rules().collect::<Vec<_>>();
         assert_eq!(rules.len(), 1);
-        
+
         let help_rule = &rules[0];
         let recipes = help_rule.recipes().collect::<Vec<_>>();
         assert_eq!(recipes.len(), 2);
@@ -2665,18 +2736,20 @@ rule: dependency
         // Recipe with a comment line
         let recipe_comment = "build:\n\t# This is a comment\n\tgcc -o app main.c\n";
         let parsed = parse(recipe_comment);
-        
+
         // Print errors if any
         if !parsed.errors.is_empty() {
             println!("Errors in test_comment_handling_in_recipes:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
-        
+
         assert!(parsed.errors.is_empty());
-        
+
         // Check if we can still get the rule structure despite errors
         let root = parsed.root();
         let rules = root.rules().collect::<Vec<_>>();
@@ -2698,48 +2771,58 @@ rule: dependency
         // Simple multiline variable
         let multiline = "SOURCES = main.c \\\n          util.c\n";
         let parsed = parse(multiline);
-        
+
         // Print errors if any
         if !parsed.errors.is_empty() {
             println!("Errors in test_multiline_variables - simple multiline:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
-        
+
         // For now, we'll skip the assertion because it fails
         // TODO: Fix multiline variable handling
         // assert!(parsed.errors.is_empty());
-        
+
         // Check the root structure despite errors
         let root = parsed.root();
         let vars = root.variable_definitions().collect::<Vec<_>>();
         println!("Found {} variables", vars.len());
         for var in &vars {
             if let Some(name) = var.name() {
-                println!("Variable: {} = {}", name, var.raw_value().unwrap_or_default());
+                println!(
+                    "Variable: {} = {}",
+                    name,
+                    var.raw_value().unwrap_or_default()
+                );
             }
         }
-        
+
         // Test other multiline variable forms
         let operators = "CFLAGS := -Wall \\\n         -Werror\n";
         let parsed = parse(operators);
         if !parsed.errors.is_empty() {
             println!("Errors in test_multiline_variables - operators:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
-        
+
         let append = "LDFLAGS += -L/usr/lib \\\n          -lm\n";
         let parsed = parse(append);
         if !parsed.errors.is_empty() {
             println!("Errors in test_multiline_variables - append:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
     }
@@ -2752,35 +2835,41 @@ rule: dependency
         if !parsed.errors.is_empty() {
             println!("Errors in test_whitespace_and_eof_handling - blank lines:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
-        
+
         // File ending with space
         let trailing_space = "VAR = value \n";
         let parsed = parse(trailing_space);
         if !parsed.errors.is_empty() {
             println!("Errors in test_whitespace_and_eof_handling - trailing space:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         }
-        
+
         // No final newline
         let no_newline = "VAR = value";
         let parsed = parse(no_newline);
         if !parsed.errors.is_empty() {
             println!("Errors in test_whitespace_and_eof_handling - no newline:");
             for err in &parsed.errors {
-                println!("Line {}: {} (Context: '{}')", 
-                        err.line, err.message, err.context);
+                println!(
+                    "Line {}: {} (Context: '{}')",
+                    err.line, err.message, err.context
+                );
             }
         } else {
             println!("Successfully parsed file without final newline");
         }
-        
+
         // For now, we'll skip the assertion because it fails
         // TODO: Fix whitespace handling
         // assert!(parsed.errors.is_empty());
@@ -2792,12 +2881,12 @@ rule: dependency
         let wildcard = "SOURCES = $(wildcard *.c)\n";
         let parsed = parse(wildcard);
         assert!(parsed.errors.is_empty());
-        
+
         // Nested variable reference
         let nested = "PREFIX = /usr\nBINDIR = $(PREFIX)/bin\n";
         let parsed = parse(nested);
         assert!(parsed.errors.is_empty());
-        
+
         // Function with complex arguments
         let patsubst = "OBJECTS = $(patsubst %.c,%.o,$(SOURCES))\n";
         let parsed = parse(patsubst);
@@ -2810,12 +2899,12 @@ rule: dependency
         let wildcard = "SOURCES = $(wildcard *.c)\n";
         let parsed = parse(wildcard);
         assert!(parsed.errors.is_empty());
-        
+
         // Nested variable reference
         let nested = "PREFIX = /usr\nBINDIR = $(PREFIX)/bin\n";
         let parsed = parse(nested);
         assert!(parsed.errors.is_empty());
-        
+
         // Function with complex arguments
         let patsubst = "OBJECTS = $(patsubst %.c,%.o,$(SOURCES))\n";
         let parsed = parse(patsubst);
@@ -2831,20 +2920,29 @@ LONG_VAR = This is a long variable \
     that continues on the next line \
     and even one more line
 "#;
-        
+
         // For now, we'll use relaxed parsing since the backslash handling isn't fully implemented
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline variable");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline variable");
+
         // Check that we can extract the variable even with errors
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
-        assert_eq!(vars.len(), 1, "Expected 1 variable but found {}", vars.len());
+        assert_eq!(
+            vars.len(),
+            1,
+            "Expected 1 variable but found {}",
+            vars.len()
+        );
         let var_value = vars[0].raw_value();
         assert!(var_value.is_some(), "Variable value is None");
-        
+
         // The value might not be perfect due to relaxed parsing, but it should contain most of the content
         let value_str = var_value.unwrap();
-        assert!(value_str.contains("long variable"), "Value doesn't contain expected content");
+        assert!(
+            value_str.contains("long variable"),
+            "Value doesn't contain expected content"
+        );
     }
 
     #[test]
@@ -2857,20 +2955,35 @@ CFLAGS := -Wall -O2 \
 "#;
         // Use relaxed parsing for now
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline variable with operators");
-        
+        let makefile = Makefile::read_relaxed(&mut buf)
+            .expect("Failed to parse multiline variable with operators");
+
         // Check that we can extract variables even with errors
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
-        assert!(vars.len() >= 1, "Expected at least 1 variable, found {}", vars.len());
-        
+        assert!(
+            vars.len() >= 1,
+            "Expected at least 1 variable, found {}",
+            vars.len()
+        );
+
         // Check PREFIX variable
-        let prefix_var = vars.iter().find(|v| v.name().unwrap_or_default() == "PREFIX");
+        let prefix_var = vars
+            .iter()
+            .find(|v| v.name().unwrap_or_default() == "PREFIX");
         assert!(prefix_var.is_some(), "Expected to find PREFIX variable");
-        assert!(prefix_var.unwrap().raw_value().is_some(), "PREFIX variable has no value");
-        
+        assert!(
+            prefix_var.unwrap().raw_value().is_some(),
+            "PREFIX variable has no value"
+        );
+
         // CFLAGS may be parsed incompletely but should exist in some form
-        let cflags_var = vars.iter().find(|v| v.name().unwrap_or_default().contains("CFLAGS"));
-        assert!(cflags_var.is_some(), "Expected to find CFLAGS variable (or part of it)");
+        let cflags_var = vars
+            .iter()
+            .find(|v| v.name().unwrap_or_default().contains("CFLAGS"));
+        assert!(
+            cflags_var.is_some(),
+            "Expected to find CFLAGS variable (or part of it)"
+        );
     }
 
     // ISSUE 2: Indented Line Tests
@@ -2887,20 +3000,27 @@ help:
 "#;
         // Use relaxed parsing for now
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse indented help text");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse indented help text");
+
         // Check that we can extract rules even with errors
         let rules = makefile.rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected at least one rule");
-        
+
         // Find help rule
         let help_rule = rules.iter().find(|r| r.targets().any(|t| t == "help"));
         assert!(help_rule.is_some(), "Expected to find help rule");
-        
+
         // Check recipes - they might not be perfectly parsed but should exist
         let recipes = help_rule.unwrap().recipes().collect::<Vec<_>>();
-        assert!(!recipes.is_empty(), "Expected at least one recipe line in help rule");
-        assert!(recipes.iter().any(|r| r.contains("Available targets")), "Expected to find 'Available targets' in recipes");
+        assert!(
+            !recipes.is_empty(),
+            "Expected at least one recipe line in help rule"
+        );
+        assert!(
+            recipes.iter().any(|r| r.contains("Available targets")),
+            "Expected to find 'Available targets' in recipes"
+        );
     }
 
     #[test]
@@ -2915,7 +3035,11 @@ ifdef DEBUG
 endif
 "#;
         let parsed = parse(content);
-        assert!(parsed.errors.is_empty(), "Failed to parse indented lines in conditionals: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse indented lines in conditionals: {:?}",
+            parsed.errors
+        );
     }
 
     // ISSUE 3: Colon vs Assignment Operators
@@ -2928,7 +3052,11 @@ build:
 	gcc -o program main.c
 "#;
         let parsed = parse(content);
-        assert!(parsed.errors.is_empty(), "Failed to parse recipe with colon: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse recipe with colon: {:?}",
+            parsed.errors
+        );
     }
 
     #[test]
@@ -2948,15 +3076,21 @@ all:: prerequisite2
 	@echo "Second rule for all"
 "#;
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse double colon rules");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse double colon rules");
+
         // Check that we can extract rules even with errors
         let rules = makefile.rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected at least one rule");
-        
+
         // The all rule might be parsed incorrectly but should exist in some form
-        let all_rules = rules.iter().filter(|r| r.targets().any(|t| t.contains("all")));
-        assert!(all_rules.count() > 0, "Expected to find at least one rule containing 'all'");
+        let all_rules = rules
+            .iter()
+            .filter(|r| r.targets().any(|t| t.contains("all")));
+        assert!(
+            all_rules.count() > 0,
+            "Expected to find at least one rule containing 'all'"
+        );
     }
 
     // ISSUE 4: Conditionals and elif Tests
@@ -2977,7 +3111,7 @@ endif
         // Use relaxed parsing for now
         let mut buf = content.as_bytes();
         let _makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse elif directive");
-        
+
         // For now, just verify that the parsing doesn't panic
         // We'll add more specific assertions once elif support is implemented
     }
@@ -2986,30 +3120,31 @@ endif
     fn test_ambiguous_assignment_vs_rule() {
         // Test case: Variable assignment with equals sign
         const VAR_ASSIGNMENT: &str = "VARIABLE = value\n";
-        
+
         let mut buf = std::io::Cursor::new(VAR_ASSIGNMENT);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse variable assignment");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse variable assignment");
+
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
         let rules = makefile.rules().collect::<Vec<_>>();
-        
+
         assert_eq!(vars.len(), 1, "Expected 1 variable, found {}", vars.len());
         assert_eq!(rules.len(), 0, "Expected 0 rules, found {}", rules.len());
-        
+
         assert_eq!(vars[0].name(), Some("VARIABLE".to_string()));
-        
+
         // Test case: Simple rule with colon
         const SIMPLE_RULE: &str = "target: dependency\n";
-        
+
         let mut buf = std::io::Cursor::new(SIMPLE_RULE);
         let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse simple rule");
-        
+
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
         let rules = makefile.rules().collect::<Vec<_>>();
-        
+
         assert_eq!(vars.len(), 0, "Expected 0 variables, found {}", vars.len());
         assert_eq!(rules.len(), 1, "Expected 1 rule, found {}", rules.len());
-        
+
         let rule = &rules[0];
         assert_eq!(rule.targets().collect::<Vec<_>>(), vec!["target"]);
     }
@@ -3029,7 +3164,11 @@ ifdef RELEASE
 endif
 "#;
         let parsed = parse(content);
-        assert!(parsed.errors.is_empty(), "Failed to parse nested conditionals: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse nested conditionals: {:?}",
+            parsed.errors
+        );
     }
 
     // ISSUE 5: Tab vs Space for Recipes
@@ -3045,12 +3184,13 @@ build:
 "#;
         // Use relaxed parsing for now
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse space-indented recipes");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse space-indented recipes");
+
         // Check that we can extract rules even with errors
         let rules = makefile.rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected at least one rule");
-        
+
         // Find build rule
         let build_rule = rules.iter().find(|r| r.targets().any(|t| t == "build"));
         assert!(build_rule.is_some(), "Expected to find build rule");
@@ -3067,7 +3207,11 @@ NAME := $(if $(PROGRAM),$(PROGRAM),a.out)
 HEADERS := ${wildcard *.h}
 "#;
         let parsed = parse(content);
-        assert!(parsed.errors.is_empty(), "Failed to parse complex variable functions: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse complex variable functions: {:?}",
+            parsed.errors
+        );
     }
 
     #[test]
@@ -3079,7 +3223,11 @@ TARBALL = $(PACKAGE)-$(VERSION).tar.gz
 INSTALL_PATH = $(shell echo $(PREFIX) | sed 's/\/$//')
 "#;
         let parsed = parse(content);
-        assert!(parsed.errors.is_empty(), "Failed to parse nested variable expansions: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse nested variable expansions: {:?}",
+            parsed.errors
+        );
     }
 
     // ISSUE 8: Special Directives
@@ -3097,15 +3245,18 @@ export PATH := /usr/bin:/bin
 "#;
         // Use relaxed parsing to allow for special directives
         let mut buf = content.as_bytes();
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse special directives");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse special directives");
+
         // Check that we can extract rules even with errors
         let rules = makefile.rules().collect::<Vec<_>>();
-        
+
         // Find phony rule
-        let phony_rule = rules.iter().find(|r| r.targets().any(|t| t.contains(".PHONY")));
+        let phony_rule = rules
+            .iter()
+            .find(|r| r.targets().any(|t| t.contains(".PHONY")));
         assert!(phony_rule.is_some(), "Expected to find .PHONY rule");
-        
+
         // Check that variables can be extracted
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
         assert!(!vars.is_empty(), "Expected to find at least one variable");
@@ -3133,19 +3284,19 @@ clean:
 "#;
 
         let parsed = parse(content);
-        
+
         // Print parse results for debugging
         if !parsed.errors.is_empty() {
             println!("Errors: {:#?}", parsed.errors);
         }
-        
+
         // Check that parsing succeeded
         assert!(parsed.errors.is_empty(), "Expected no parsing errors");
-        
+
         // Check that we found variables
         let variables = parsed.root().variable_definitions().collect::<Vec<_>>();
         assert!(!variables.is_empty(), "Expected at least one variable");
-        
+
         // Check that we found rules
         let rules = parsed.root().rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected at least one rule");
@@ -3154,26 +3305,30 @@ clean:
     #[test]
     fn test_complex_multiline_variable_handling() {
         // Test a multiline variable with backslash continuation
-        const SIMPLE_MULTILINE: &str = "MULTILINE = first line \\\nsecond line \\\nthird line\nNEXT_VAR = some value\n";
-        
+        const SIMPLE_MULTILINE: &str =
+            "MULTILINE = first line \\\nsecond line \\\nthird line\nNEXT_VAR = some value\n";
+
         let mut buf = std::io::Cursor::new(SIMPLE_MULTILINE);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline variable");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline variable");
+
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
         assert_eq!(vars.len(), 2, "Expected 2 variables, found {}", vars.len());
-        
+
         let multiline_var = &vars[0];
         assert_eq!(multiline_var.name(), Some("MULTILINE".to_string()));
-        
+
         // Variable with different operators
-        const MULTILINE_OPERATORS: &str = "VAR1 := first \\\nsecond\nVAR2 += third \\\nfourth\nVAR3 ?= fifth \\\nsixth\n";
-        
+        const MULTILINE_OPERATORS: &str =
+            "VAR1 := first \\\nsecond\nVAR2 += third \\\nfourth\nVAR3 ?= fifth \\\nsixth\n";
+
         let mut buf = std::io::Cursor::new(MULTILINE_OPERATORS);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline operators");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse multiline operators");
+
         let vars = makefile.variable_definitions().collect::<Vec<_>>();
         assert_eq!(vars.len(), 3, "Expected 3 variables, found {}", vars.len());
-        
+
         // Check variable names
         assert_eq!(vars[0].name(), Some("VAR1".to_string()));
         assert_eq!(vars[1].name(), Some("VAR2".to_string()));
@@ -3183,79 +3338,101 @@ clean:
     #[test]
     fn test_mixed_indentation_recipes() {
         // Test tab-indented recipes first
-        const TAB_INDENTED: &str = "tab-rule:\n\ttab-indented command\n\tanother tab-indented command\n\n";
+        const TAB_INDENTED: &str =
+            "tab-rule:\n\ttab-indented command\n\tanother tab-indented command\n\n";
 
         let mut buf = std::io::Cursor::new(TAB_INDENTED);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse tab-indented recipes");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse tab-indented recipes");
+
         let rules = makefile.rules().collect::<Vec<_>>();
         assert_eq!(rules.len(), 1, "Expected 1 rule with tab indentation");
-        
+
         // Check the tab-indented rule
         let tab_rule = &rules[0];
         assert_eq!(tab_rule.targets().collect::<Vec<_>>(), vec!["tab-rule"]);
-        
+
         // Test space-indented recipes
-        const SPACE_INDENTED: &str = "space-rule:\n  space-indented command\n  another space-indented command\n\n";
+        const SPACE_INDENTED: &str =
+            "space-rule:\n  space-indented command\n  another space-indented command\n\n";
 
         let mut buf = std::io::Cursor::new(SPACE_INDENTED);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse space-indented recipes");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse space-indented recipes");
+
         let rules = makefile.rules().collect::<Vec<_>>();
         assert_eq!(rules.len(), 1, "Expected 1 rule with space indentation");
-        
+
         // Check the space-indented rule
         let space_rule = &rules[0];
         assert_eq!(space_rule.targets().collect::<Vec<_>>(), vec!["space-rule"]);
-        
+
         // Test with various space indentation depths - for now, as a separate test
-        const VARIED_SPACES: &str = "two-spaces:\n  two space indent\n    four space indent\n      six space indent\n\n";
+        const VARIED_SPACES: &str =
+            "two-spaces:\n  two space indent\n    four space indent\n      six space indent\n\n";
 
         let mut buf = std::io::Cursor::new(VARIED_SPACES);
-        let makefile = Makefile::read_relaxed(&mut buf).expect("Failed to parse varied space indentation");
-        
+        let makefile =
+            Makefile::read_relaxed(&mut buf).expect("Failed to parse varied space indentation");
+
         let rules = makefile.rules().collect::<Vec<_>>();
-        assert_eq!(rules.len(), 1, "Expected 1 rule with varied space indentation");
+        assert_eq!(
+            rules.len(),
+            1,
+            "Expected 1 rule with varied space indentation"
+        );
     }
 
     #[test]
     fn test_eof_after_variable_reference() {
         // Test with variable reference at EOF (no trailing newline)
-        let content = ".PHONY: $(PHONY)";  // No newline at the end
-        
+        let content = ".PHONY: $(PHONY)"; // No newline at the end
+
         let parsed = parse(content);
         if !parsed.errors.is_empty() {
-            println!("Errors parsing EOF after variable reference (no newline): {:?}", parsed.errors);
+            println!(
+                "Errors parsing EOF after variable reference (no newline): {:?}",
+                parsed.errors
+            );
         }
-        
-        assert!(parsed.errors.is_empty(), "Failed to parse variable reference at EOF (no newline)");
-        
+
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse variable reference at EOF (no newline)"
+        );
+
         // Test with variable reference followed by a newline at EOF
         let content_with_newline = ".PHONY: $(PHONY)\n";
-        
+
         let parsed = parse(content_with_newline);
         if !parsed.errors.is_empty() {
-            println!("Errors parsing EOF after variable reference (with newline): {:?}", parsed.errors);
+            println!(
+                "Errors parsing EOF after variable reference (with newline): {:?}",
+                parsed.errors
+            );
         }
-        
-        assert!(parsed.errors.is_empty(), "Failed to parse variable reference at EOF (with newline)");
-        
+
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse variable reference at EOF (with newline)"
+        );
+
         // Check that rule parsing works in both cases
         let rules = parsed.root().rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected to find the .PHONY rule");
-        
+
         // Check the rule has the correct target
         let rule = &rules[0];
         let targets = rule.targets().collect::<Vec<_>>();
         assert_eq!(targets.len(), 1, "Expected one target");
         assert_eq!(targets[0], ".PHONY", "Expected .PHONY target");
-        
+
         // Check prerequisites - should contain the variable reference
         let prereqs = rule.prerequisites().collect::<Vec<_>>();
         assert_eq!(prereqs.len(), 1, "Expected one prerequisite");
         assert_eq!(prereqs[0], "$(PHONY)", "Expected $(PHONY) prerequisite");
     }
-    
+
     #[test]
     fn test_indented_help_text_outside_rules() {
         // Test for parsing issues with indented lines that are not recipes
@@ -3272,62 +3449,106 @@ help:
 clean:
 	rm -rf build/
 "#;
-        
+
         let parsed = parse(content);
         if !parsed.errors.is_empty() {
             println!("Errors parsing indented help text: {:?}", parsed.errors);
         }
-        
-        assert!(parsed.errors.is_empty(), "Failed to parse indented help text");
-        
+
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse indented help text"
+        );
+
         // Check that we found the rules
         let rules = parsed.root().rules().collect::<Vec<_>>();
         assert_eq!(rules.len(), 2, "Expected to find two rules");
-        
+
         // Find the rules by target
-        let help_rule = rules.iter().find(|r| r.targets().any(|t| t == "help")).expect("Expected to find help rule");
-        let clean_rule = rules.iter().find(|r| r.targets().any(|t| t == "clean")).expect("Expected to find clean rule");
-        
+        let help_rule = rules
+            .iter()
+            .find(|r| r.targets().any(|t| t == "help"))
+            .expect("Expected to find help rule");
+        let clean_rule = rules
+            .iter()
+            .find(|r| r.targets().any(|t| t == "clean"))
+            .expect("Expected to find clean rule");
+
         // Check the help rule has the correct recipe lines
         let help_recipes = help_rule.recipes().collect::<Vec<_>>();
-        assert_eq!(help_recipes.len(), 4, "Expected 4 recipe lines in help rule");
-        assert!(help_recipes[0].contains("Available targets"), "Expected first recipe line to contain 'Available targets'");
-        assert!(help_recipes[1].contains("build"), "Expected second recipe line to contain 'build'");
-        
+        assert_eq!(
+            help_recipes.len(),
+            4,
+            "Expected 4 recipe lines in help rule"
+        );
+        assert!(
+            help_recipes[0].contains("Available targets"),
+            "Expected first recipe line to contain 'Available targets'"
+        );
+        assert!(
+            help_recipes[1].contains("build"),
+            "Expected second recipe line to contain 'build'"
+        );
+
         // Check the clean rule has the correct recipe
         let clean_recipes = clean_rule.recipes().collect::<Vec<_>>();
-        assert_eq!(clean_recipes.len(), 1, "Expected 1 recipe line in clean rule");
-        assert!(clean_recipes[0].contains("rm -rf"), "Expected recipe to contain 'rm -rf'");
+        assert_eq!(
+            clean_recipes.len(),
+            1,
+            "Expected 1 recipe line in clean rule"
+        );
+        assert!(
+            clean_recipes[0].contains("rm -rf"),
+            "Expected recipe to contain 'rm -rf'"
+        );
     }
 
     #[test]
     fn test_variable_reference_at_file_end() {
         // Test that mimics the issue in Makefile_1 where a variable reference appears at file end
-        let content = ".PHONY: all clean install $(PHONY)";  // No newline, variable reference at end
-        
+        let content = ".PHONY: all clean install $(PHONY)"; // No newline, variable reference at end
+
         let parsed = parse(content);
         if !parsed.errors.is_empty() {
-            println!("Errors parsing variable reference at file end: {:?}", parsed.errors);
+            println!(
+                "Errors parsing variable reference at file end: {:?}",
+                parsed.errors
+            );
         }
-        
-        assert!(parsed.errors.is_empty(), "Failed to parse variable reference at end of file");
-        
+
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse variable reference at end of file"
+        );
+
         // Check that rule parsing works
         let rules = parsed.root().rules().collect::<Vec<_>>();
         assert!(!rules.is_empty(), "Expected to find rule");
-        
+
         // Check the rule has the correct targets and prerequisites
         let rule = &rules[0];
         let targets = rule.targets().collect::<Vec<_>>();
         assert_eq!(targets.len(), 1, "Expected one target");
         assert_eq!(targets[0], ".PHONY", "Expected .PHONY target");
-        
+
         let prereqs = rule.prerequisites().collect::<Vec<_>>();
         assert_eq!(prereqs.len(), 4, "Expected four prerequisites");
-        assert!(prereqs.contains(&"all".to_string()), "Expected 'all' in prerequisites");
-        assert!(prereqs.contains(&"clean".to_string()), "Expected 'clean' in prerequisites");
-        assert!(prereqs.contains(&"install".to_string()), "Expected 'install' in prerequisites");
-        assert!(prereqs.contains(&"$(PHONY)".to_string()), "Expected '$(PHONY)' in prerequisites");
+        assert!(
+            prereqs.contains(&"all".to_string()),
+            "Expected 'all' in prerequisites"
+        );
+        assert!(
+            prereqs.contains(&"clean".to_string()),
+            "Expected 'clean' in prerequisites"
+        );
+        assert!(
+            prereqs.contains(&"install".to_string()),
+            "Expected 'install' in prerequisites"
+        );
+        assert!(
+            prereqs.contains(&"$(PHONY)".to_string()),
+            "Expected '$(PHONY)' in prerequisites"
+        );
     }
 
     #[test]
@@ -3344,8 +3565,12 @@ all: main.o utils.o
 	gcc -o all main.o utils.o
 "#;
         let parsed = parse(phony_with_docs);
-        assert!(parsed.errors.is_empty(), "Failed to parse .PHONY with documentation: {:?}", parsed.errors);
-        
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse .PHONY with documentation: {:?}",
+            parsed.errors
+        );
+
         // 2. Help text with indented lines that aren't recipes
         let help_text = r#"
 # Help targets
@@ -3363,8 +3588,12 @@ clean:
 	rm -rf *.o
 "#;
         let parsed = parse(help_text);
-        assert!(parsed.errors.is_empty(), "Failed to parse help text: {:?}", parsed.errors);
-        
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse help text: {:?}",
+            parsed.errors
+        );
+
         // 3. Documentation between rules with empty lines
         let docs_between_rules = r#"
 rule1: dep1.o
@@ -3379,8 +3608,12 @@ rule2: dep2.o
 	echo "Building rule2"
 "#;
         let parsed = parse(docs_between_rules);
-        assert!(parsed.errors.is_empty(), "Failed to parse docs between rules: {:?}", parsed.errors);
-        
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse docs between rules: {:?}",
+            parsed.errors
+        );
+
         // 4. Mixed indentation in recipes (tabs and spaces)
         let mixed_indentation = r#"
 target: prereq
@@ -3393,10 +3626,13 @@ target: prereq
         let parsed = parse(mixed_indentation);
         // We don't assert errors.is_empty() here because Make is strict about tab indentation,
         // but we should handle it without completely failing the parse
-        
+
         let rules = parsed.root().rules().collect::<Vec<_>>();
-        assert!(!rules.is_empty(), "Should have parsed at least one rule despite indentation issues");
-        
+        assert!(
+            !rules.is_empty(),
+            "Should have parsed at least one rule despite indentation issues"
+        );
+
         // 5. Special case: indented blocks right after variable definitions
         let indented_after_var = r#"
 VERSION = 1.0.0
@@ -3408,61 +3644,75 @@ target: prereq
 	echo "Building $(VERSION)"
 "#;
         let parsed = parse(indented_after_var);
-        assert!(parsed.errors.is_empty(), "Failed to parse indented block after variable: {:?}", parsed.errors);
+        assert!(
+            parsed.errors.is_empty(),
+            "Failed to parse indented block after variable: {:?}",
+            parsed.errors
+        );
     }
 
     #[test]
     fn test_variable_reference_with_trailing_whitespace() {
         // Test cases with trailing whitespace after variable references
         let test_cases = [
-            ".PHONY: target $(FOO) ", // trailing space after variable
-            ".PHONY: target $(FOO)\t", // trailing tab after variable
-            ".PHONY: target $(FOO) \t ", // mixed trailing whitespace
-            ".PHONY: target $ (FOO)", // space after $ (should recover)
-            ".PHONY: target $(FOO", // unclosed parenthesis at end of file
+            ".PHONY: target $(FOO) ",              // trailing space after variable
+            ".PHONY: target $(FOO)\t",             // trailing tab after variable
+            ".PHONY: target $(FOO) \t ",           // mixed trailing whitespace
+            ".PHONY: target $ (FOO)",              // space after $ (should recover)
+            ".PHONY: target $(FOO",                // unclosed parenthesis at end of file
             "FOO = value\nBAR = $(FOO) # comment", // trailing whitespace and comment
         ];
 
         for (i, content) in test_cases.iter().enumerate() {
             println!("Testing case {}: {:?}", i, content);
-            
+
             // Parse with relaxed error handling
             let mut buf = content.as_bytes();
             let makefile_result = Makefile::read_relaxed(&mut buf);
-            
+
             match makefile_result {
                 Ok(makefile) => {
                     // If it parses successfully, that's fine
                     let rule_count = makefile.rules().count();
                     let var_count = makefile.variable_definitions().count();
-                    println!("Successfully parsed: {} rules, {} variables", rule_count, var_count);
-                    
+                    println!(
+                        "Successfully parsed: {} rules, {} variables",
+                        rule_count, var_count
+                    );
+
                     // Expect some objects to be found
-                    assert!(rule_count > 0 || var_count > 0, 
-                           "Should have found at least one rule or variable");
+                    assert!(
+                        rule_count > 0 || var_count > 0,
+                        "Should have found at least one rule or variable"
+                    );
                 }
                 Err(err) => {
                     if let Error::Parse(parse_err) = err {
                         // Even with errors, we should be able to extract partial content
                         println!("Parse errors: {:?}", parse_err);
-                        
+
                         // Test again with regular parse to see if our handle_eof_after_variable option helps
                         let parsed = parse(content);
                         println!("Standard parse errors: {:?}", parsed.errors);
-                        
+
                         // We should still get some valid nodes
                         let root = parsed.root();
                         let rule_count = root.rules().count();
                         let var_count = root.variable_definitions().count();
-                        
-                        println!("Extracted despite errors: {} rules, {} variables", 
-                                rule_count, var_count);
-                        
+
+                        println!(
+                            "Extracted despite errors: {} rules, {} variables",
+                            rule_count, var_count
+                        );
+
                         // Even with errors, we should extract something
                         // Depending on the error location, we might get either rules or variables
-                        if i != 4 { // Skip the unclosed parenthesis case
-                            assert!(rule_count > 0 || var_count > 0, 
-                                  "Should have extracted at least partial content");
+                        if i != 4 {
+                            // Skip the unclosed parenthesis case
+                            assert!(
+                                rule_count > 0 || var_count > 0,
+                                "Should have extracted at least partial content"
+                            );
                         }
                     } else {
                         panic!("Unexpected error type: {:?}", err);
@@ -3476,26 +3726,32 @@ target: prereq
     fn test_makefile1_phony_pattern() {
         // This test replicates the specific pattern in Makefile_1 that's causing issues
         let content = "#line 2145\n.PHONY: $(PHONY)\n";
-        
+
         // Parse and check for errors
         let result = parse(content);
-        
+
         // With the file directive, we're saying this is line 2145
         if !result.errors.is_empty() {
             println!("Parse errors with line directive: {:?}", result.errors);
         }
-        
-        assert!(result.errors.is_empty(), "Failed to parse .PHONY: $(PHONY) pattern");
-        
+
+        assert!(
+            result.errors.is_empty(),
+            "Failed to parse .PHONY: $(PHONY) pattern"
+        );
+
         // Check that the rule was parsed correctly
         let rules = result.root().rules().collect::<Vec<_>>();
         assert_eq!(rules.len(), 1, "Expected 1 rule");
-        assert_eq!(rules[0].targets().next().unwrap(), ".PHONY", "Expected .PHONY rule");
-        
+        assert_eq!(
+            rules[0].targets().next().unwrap(),
+            ".PHONY",
+            "Expected .PHONY rule"
+        );
+
         // Check that the prerequisite contains the variable reference
         let prereqs = rules[0].prerequisites().collect::<Vec<_>>();
         assert_eq!(prereqs.len(), 1, "Expected 1 prerequisite");
         assert_eq!(prereqs[0], "$(PHONY)", "Expected $(PHONY) prerequisite");
     }
 }
-

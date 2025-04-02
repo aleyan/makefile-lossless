@@ -38,7 +38,7 @@ pub enum SyntaxKind {
     INDENT,
     /// Comment token (lines starting with #)
     COMMENT,
-    
+
     // Operators and punctuation
     /// Operator token (=, :=, +=, etc. for variables and : for rules)
     OPERATOR,
@@ -53,8 +53,8 @@ pub enum SyntaxKind {
     /// Backslash token
     BACKSLASH,
     /// Line continuation token (backslash followed by newline)
-    LINE_CONTINUATION, 
-    
+    LINE_CONTINUATION,
+
     // Identifiers
     /// Identifier token (names, targets, prerequisites)
     IDENTIFIER,
@@ -62,11 +62,11 @@ pub enum SyntaxKind {
     QUOTE,
     /// Raw text token (used in recipe lines)
     TEXT,
-    
+
     // Error
     /// Error token for syntax errors
     ERROR,
-    
+
     // Composite nodes
     /// Root node of the syntax tree representing the entire makefile
     ROOT,
@@ -84,7 +84,7 @@ pub enum SyntaxKind {
     CONDITIONAL,
     /// Indented block node (blocks of indented text)
     INDENTED_BLOCK,
-    
+
     // Virtual tokens. These tokens are never produced by lexer,
     // they are inserted by parser to represent higher-level constructs.
     /// Tab character inserted by parser
@@ -99,4 +99,3 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
         Self(kind as u16)
     }
 }
-

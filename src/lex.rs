@@ -86,7 +86,7 @@ impl<'a> Lexer<'a> {
         // We're at the start of a line - check for indentation
         let mut spaces = 0;
         let mut indent = String::new();
-        
+
         // Count consecutive spaces
         while let Some(&c) = self.input.peek() {
             if c == ' ' {
@@ -97,7 +97,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        
+
         // Tab at start of line is always indentation
         if let Some(&c) = self.input.peek() {
             if c == '\t' {
@@ -107,19 +107,19 @@ impl<'a> Lexer<'a> {
                 return Some((SyntaxKind::INDENT, indent));
             }
         }
-        
+
         // 2 or more spaces at start of line is indentation
         if spaces >= 2 {
             self.line_type = Some(LineType::Recipe);
             return Some((SyntaxKind::INDENT, indent));
         }
-        
+
         // Add back spaces that weren't enough for indentation
         if !indent.is_empty() {
             self.line_type = Some(LineType::Other);
             return Some((SyntaxKind::WHITESPACE, indent));
         }
-        
+
         // Not indented
         self.line_type = Some(LineType::Other);
         None
@@ -148,7 +148,7 @@ impl<'a> Lexer<'a> {
                 '\\' => {
                     // Check if this is a line continuation
                     self.input.next(); // Consume backslash
-                    
+
                     // Peek at the next character
                     if let Some(&next_c) = self.input.peek() {
                         if Self::is_newline(next_c) {
@@ -247,12 +247,19 @@ rule: prerequisite
 "#);
         // Debug print the actual tokens for debugging
         println!("Actual tokens for test_simple: {:?}", tokens);
-        
+
         // Let's be more flexible about the exact tokenization
-        let tokens_vec = tokens.iter().map(|(kind, text)| (*kind, text.as_str())).collect::<Vec<_>>();
-        
+        let tokens_vec = tokens
+            .iter()
+            .map(|(kind, text)| (*kind, text.as_str()))
+            .collect::<Vec<_>>();
+
         // Check essential parts for the variable assignment line
-        assert!(tokens_vec.len() >= 14, "Expected at least 14 tokens, got {}", tokens_vec.len());
+        assert!(
+            tokens_vec.len() >= 14,
+            "Expected at least 14 tokens, got {}",
+            tokens_vec.len()
+        );
         assert_eq!(tokens_vec[0], (IDENTIFIER, "VARIABLE"));
         assert_eq!(tokens_vec[1], (WHITESPACE, " "));
         assert_eq!(tokens_vec[2], (OPERATOR, "="));
@@ -260,15 +267,20 @@ rule: prerequisite
         assert_eq!(tokens_vec[4], (IDENTIFIER, "value"));
         assert_eq!(tokens_vec[5], (NEWLINE, "\n"));
         assert_eq!(tokens_vec[6], (NEWLINE, "\n"));
-        
+
         // Check that "rule" appears somewhere
-        let rule_idx = tokens_vec.iter().position(|&(kind, text)| kind == IDENTIFIER && text == "rule")
-                               .expect("Expected to find 'rule' token");
-        
+        let rule_idx = tokens_vec
+            .iter()
+            .position(|&(kind, text)| kind == IDENTIFIER && text == "rule")
+            .expect("Expected to find 'rule' token");
+
         // Check that "prerequisite" appears somewhere after rule
-        let _prereq_idx = tokens_vec.iter().skip(rule_idx).position(|&(kind, text)| kind == IDENTIFIER && text == "prerequisite")
-                                 .expect("Expected to find 'prerequisite' token");
-        
+        let _prereq_idx = tokens_vec
+            .iter()
+            .skip(rule_idx)
+            .position(|&(kind, text)| kind == IDENTIFIER && text == "prerequisite")
+            .expect("Expected to find 'prerequisite' token");
+
         // Check recipe line at the end
         assert_eq!(tokens_vec[tokens_vec.len() - 3], (INDENT, "\t"));
         assert_eq!(tokens_vec[tokens_vec.len() - 2], (TEXT, "recipe"));
@@ -310,12 +322,19 @@ rule: prerequisite
 "#);
         // Debug print the actual tokens for debugging
         println!("Actual tokens: {:?}", tokens);
-        
+
         // The lexer might tokenize ":=" as either a single token ":=" or as two tokens ":" and "="
         // We'll accept both forms by checking the essential parts
-        let tokens_vec = tokens.iter().map(|(kind, text)| (*kind, text.as_str())).collect::<Vec<_>>();
-        
-        assert!(tokens_vec.len() >= 7, "Expected at least 7 tokens, got {}", tokens_vec.len());
+        let tokens_vec = tokens
+            .iter()
+            .map(|(kind, text)| (*kind, text.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(
+            tokens_vec.len() >= 7,
+            "Expected at least 7 tokens, got {}",
+            tokens_vec.len()
+        );
         assert_eq!(tokens_vec[0], (IDENTIFIER, "export"));
         assert_eq!(tokens_vec[1], (WHITESPACE, " "));
         assert_eq!(tokens_vec[2], (IDENTIFIER, "VARIABLE"));
